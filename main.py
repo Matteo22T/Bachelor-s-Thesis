@@ -1,118 +1,76 @@
-import pandas as pd
-import yaml
-import argparse
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from Experiment import Experiment
+import numpy as np
 
-def load_config(config_path):
-    try:
-        with open(config_path, 'r') as file:
-            return yaml.safe_load(file)
-    except FileNotFoundError:
-        print(f"error, file not found: {config_path}")
-        exit()
-
-def load_data(embeddings_path, metadata_path, join_key):
-    print("loading data...")
-    df_emb = pd.read_csv(embeddings_path)
-    df_meta = pd.read_csv(metadata_path)
-
-    data = pd.merge(df_emb, df_meta, on=join_key)
-    return data
-
-def prepare_features(data, config):
-    target_col = config['experiment']['target_column']
-    id_col = config['data']['join_key']
-    bias_col = config['experiment']['bias_attribute']
-
-    y = data[target_col]
+import warnings
+from sklearn.exceptions import ConvergenceWarning
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
 
-    cols_to_drop = [id_col, target_col, bias_col, 'age', 'SB', 'STach', 'CD']
+def print_average_results(task_name, results_list):
+    """
+    Stampa i risultati completi (Acc, F1, AUROC) e le metriche di bias (Gap, Ratio).
+    """
+    if not results_list:
+        print(f"Nessun risultato per {task_name}")
+        return
 
-    X = data.drop(columns=cols_to_drop, errors='ignore')
-
-    return X, y
-
-def train_model(X, y, config):
-    model_type = config['experiment'].get('model_type', 'random_forest')
-    seed = config['experiment']['random_seed']
+    print(f"\n{'='*10} RISULTATI MEDI: {task_name} {'='*10}")
     
-    print(f"training: {model_type.upper()}...")
+    # Metriche di Fairness
+    gaps = [res['fairness']['max_min_gap_accuracy'] for res in results_list]
+    tpr_ratios = [res['fairness']['eq_odds_tpr_ratio'] for res in results_list]
+    fpr_ratios = [res['fairness']['eq_odds_fpr_ratio'] for res in results_list] # 
     
-    if model_type == "random_forest":
-        model = RandomForestClassifier(n_estimators=100, random_state=seed)
+    # Metriche Maschi (Group A)
+    acc_m = [res['performance']['group_a']['acc'] for res in results_list]
+    f1_m = [res['performance']['group_a']['f1'] for res in results_list]       # 
+    auc_m = [res['performance']['group_a']['auroc'] for res in results_list]    # 
+
+    # Metriche Femmine (Group B)
+    acc_f = [res['performance']['group_b']['acc'] for res in results_list]
+    f1_f = [res['performance']['group_b']['f1'] for res in results_list]
+    auc_f = [res['performance']['group_b']['auroc'] for res in results_list]
+
+    print("-------------------  PERFORMANCE  -------------------")
+    print(f"{'Metrica':<15} | {'Maschi':<10} | {'Femmine':<10} |")
+    print("-" * 43)
+    print(f"{'Accuracy':<15} | {np.mean(acc_m)*100:.2f}%     | {np.mean(acc_f)*100:.2f}%     |")
+    print(f"{'F1-Score':<15} | {np.mean(f1_m):.4f}     | {np.mean(f1_f):.4f}     |")
+    print(f"{'AUROC':<15}    | {np.mean(auc_m):.4f}     | {np.mean(auc_f):.4f}     |")
     
-    elif model_type == "logistic_regression":
-        model = LogisticRegression(random_state=seed, max_iter=1500)
+    print(f"\n--- FAIRNESS & BIAS (Indicatori di equità) ---")
     
-    else:
-        print(f"error: model '{model_type}' not recognized!")
-        exit()
-        
-    model.fit(X, y)
-    return model
+    # Max-Min Gap 
+    gap_medio = np.mean(gaps)
+    print(f"-> Max-Min Gap Accuracy:     {gap_medio*100:.2f}%  (Ideale: 0%)")
+    
+    # Equality of Odds (TPR) 
+    # Se > 1: Favorisce Maschi. Se < 1: Favorisce Femmine.
+    tpr_mean = np.mean(tpr_ratios)
+    print(f"-> TPR Ratio (Eq. Odds):     {tpr_mean:.4f}   (Ideale: 1.0)")
+    
+    # Equality of Odds (FPR) 
+    # Se > 1: Favorisce Femmine. Se < 1: Favorisce Maschi.
+    fpr_mean = np.mean(fpr_ratios)
+    print(f"-> FPR Ratio (Eq. Odds):     {fpr_mean:.4f}   (Ideale: 1.0)")
+    print("=====================================================\n")
 
 
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description="Train a model to predict medical conditions from ECG embeddings.")
-    parser.add_argument('--config', type=str, default='config.yaml', help='Path to')
-
-    args = parser.parse_args()
-
-    print("using config file:", args.config)
-
-
-    config = load_config(args.config)
-
-    data = load_data(
-            config['data']['embeddings_path'], 
-            config['data']['metadata_path']
-            ,config['data']['join_key']
-        )
+    exp = Experiment(config_path='config.yaml')
     
-    bias_col = config['experiment']['bias_attribute']
-    train_group = config['experiment']['train_group']
-    test_group = config['experiment']['test_group']
+    full_data = exp.data_loader.load_data()
 
+    results_base = exp.run_base_case(full_data)
+    print_average_results("CASO BASE (Task 1)", results_base)    
 
-    print(f"Filtering data for training group: {train_group} and testing group: {test_group}")
+    results_extreme = exp.run_extreme_case(full_data)
+    print_average_results("CASO ESTREMO (Task 2)", results_extreme)
 
-    df_group_A = data[data[bias_col] == train_group]
-    df_group_B = data[data[bias_col] == test_group]
+    results_shap = exp.run_shap_analysis(full_data)
+    print_average_results("TASK 4 (SHAP Ablation)", results_shap)
 
-    X_A, y_A = prepare_features(df_group_A, config)
-    X_train, X_test_same_group, y_train, y_test_same_group = train_test_split(
-        X_A, y_A, test_size=0.2, random_state=42, stratify=y_A
-    )
+    exp.run_counterfactual_case(full_data)
+    print("=====================================================\n")
 
-    X_test_other_group, y_test_other_group = prepare_features(df_group_B, config)
-
-   
-
-    print(f"training on {len(X_train)} exemples of group {train_group}...")
-    model = train_model(X_train, y_train, config)
-
-    pred_same = model.predict(X_test_same_group)
-    acc_same = accuracy_score(y_test_same_group, pred_same)
-
-    pred_other = model.predict(X_test_other_group)
-    acc_other = accuracy_score(y_test_other_group, pred_other)
-
-    gap = acc_same - acc_other
-
-    
-    
-
-    print("\n" + "="*40)
-    print(f" Results for bias attribute: {bias_col}")
-    print("="*40)
-    print(f" base accuracy  ({train_group} -> {train_group}):  {acc_same:.2%}")
-    print(f" transfer accuracy ({train_group} -> {test_group}): {acc_other:.2%}")
-    print("-" * 40)
-    print(f" GAP (Bias): {gap:.2%} (Positive = Favors {train_group})")
-    print("="*40)
