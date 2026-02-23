@@ -1,6 +1,8 @@
 data/
 *.csv
 *.zip
+*.joblib
+*.csv#
 
 requirements.txt
 .vscode/
@@ -8,3 +10,4 @@ requirements.txt
 __pycache__/
 .DS_Store
 *.ipynb_checkpoints/
+

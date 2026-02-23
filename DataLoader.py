@@ -19,8 +19,8 @@ class DataLoader:
     
     def balance_model(self, data):
         strategy = getattr(self.config.experiment, 'balancing_strategy', None)
-        target_col = self.config.experiment.target_column
-        bias_col = self.config.experiment.bias_attribute
+        target_col = self.config.experiment.target_column[0]
+        bias_col = self.config.experiment.bias_attribute[0]
 
         if strategy == None:
             return data
@@ -36,7 +36,7 @@ class DataLoader:
 
 
     def prepare_features(self, data, train=True):
-        target_col = self.config.experiment.target_column
+        target_col = self.config.experiment.target_column[0]
         metadata_to_concat = getattr(self.config.data, 'metadata_to_concatenate', [])
         X = data.drop(columns=(self.config.data.cols_to_exclude), errors='ignore')
 

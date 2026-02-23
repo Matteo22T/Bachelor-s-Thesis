@@ -1,59 +1,15 @@
 from Experiment import Experiment
+from MetricManager import MetricManager
 import numpy as np
 
 import warnings
-from sklearn.exceptions import ConvergenceWarning
+from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
+# Ignora gli avvisi di mancata convergenza
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
-
-
-def print_average_results(task_name, results_list):
-    """
-    Stampa i risultati completi (Acc, F1, AUROC) e le metriche di bias (Gap, Ratio).
-    """
-    if not results_list:
-        print(f"Nessun risultato per {task_name}")
-        return
-
-    print(f"\n{'='*10} RISULTATI MEDI: {task_name} {'='*10}")
-    
-    # Metriche di Fairness
-    gaps = [res['fairness']['max_min_gap_accuracy'] for res in results_list]
-    tpr_ratios = [res['fairness']['eq_odds_tpr_ratio'] for res in results_list]
-    fpr_ratios = [res['fairness']['eq_odds_fpr_ratio'] for res in results_list] # 
-    
-    # Metriche Maschi (Group A)
-    acc_m = [res['performance']['group_a']['acc'] for res in results_list]
-    f1_m = [res['performance']['group_a']['f1'] for res in results_list]       # 
-    auc_m = [res['performance']['group_a']['auroc'] for res in results_list]    # 
-
-    # Metriche Femmine (Group B)
-    acc_f = [res['performance']['group_b']['acc'] for res in results_list]
-    f1_f = [res['performance']['group_b']['f1'] for res in results_list]
-    auc_f = [res['performance']['group_b']['auroc'] for res in results_list]
-
-    print("-------------------  PERFORMANCE  -------------------")
-    print(f"{'Metrica':<15} | {'Maschi':<10} | {'Femmine':<10} |")
-    print("-" * 43)
-    print(f"{'Accuracy':<15} | {np.mean(acc_m)*100:.2f}%     | {np.mean(acc_f)*100:.2f}%     |")
-    print(f"{'F1-Score':<15} | {np.mean(f1_m):.4f}     | {np.mean(f1_f):.4f}     |")
-    print(f"{'AUROC':<15}    | {np.mean(auc_m):.4f}     | {np.mean(auc_f):.4f}     |")
-    
-    print(f"\n--- FAIRNESS & BIAS (Indicatori di equità) ---")
-    
-    # Max-Min Gap 
-    gap_medio = np.mean(gaps)
-    print(f"-> Max-Min Gap Accuracy:     {gap_medio*100:.2f}%  (Ideale: 0%)")
-    
-    # Equality of Odds (TPR) 
-    # Se > 1: Favorisce Maschi. Se < 1: Favorisce Femmine.
-    tpr_mean = np.mean(tpr_ratios)
-    print(f"-> TPR Ratio (Eq. Odds):     {tpr_mean:.4f}   (Ideale: 1.0)")
-    
-    # Equality of Odds (FPR) 
-    # Se > 1: Favorisce Femmine. Se < 1: Favorisce Maschi.
-    fpr_mean = np.mean(fpr_ratios)
-    print(f"-> FPR Ratio (Eq. Odds):     {fpr_mean:.4f}   (Ideale: 1.0)")
-    print("=====================================================\n")
+# Ignora gli avvisi delle combinazioni incompatibili nella GridSearch (lbfgs + l1)
+warnings.filterwarnings("ignore", category=FitFailedWarning)
+# Ignora gli UserWarning generali (quelli fastidiosi sull' l1_ratio deprecato)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 
@@ -62,15 +18,36 @@ if __name__ == "__main__":
     
     full_data = exp.data_loader.load_data()
 
-    results_base = exp.run_base_case(full_data)
-    print_average_results("CASO BASE (Task 1)", results_base)    
+    save_csv = getattr(exp.config.experiment, 'save_results_csv', False)
+    csv_path = getattr(exp.config.experiment, 'results_csv_path', 'results.csv')
+    model_type = exp.config.experiment.model_type
 
-    results_extreme = exp.run_extreme_case(full_data)
-    print_average_results("CASO ESTREMO (Task 2)", results_extreme)
+    if exp.config.experiment.task1:
+        results_base = exp.run_base_case(full_data)
+        MetricManager.print_summary("CASO BASE (Task 1)", results_base)
+        if save_csv:
+            MetricManager.save_to_csv("CASO BASE (Task 1)", model_type, results_base, csv_path)
 
-    results_shap = exp.run_shap_analysis(full_data)
-    print_average_results("TASK 4 (SHAP Ablation)", results_shap)
+    if exp.config.experiment.task2:
+        results_extreme = exp.run_extreme_case(full_data)
+        MetricManager.print_summary("CASO ESTREMO (Task 2)", results_extreme)
+        if save_csv:
+            MetricManager.save_to_csv("CASO ESTREMO (Task 2)", model_type, results_extreme, csv_path)
 
-    exp.run_counterfactual_case(full_data)
+    if exp.config.experiment.task3:
+        exp.run_counterfactual_case(full_data)
+
+    if exp.config.experiment.task4:
+        results_shap_dict = exp.run_shap_analysis(full_data)
+        
+        for n_feat, results_shap in results_shap_dict.items():
+            
+            task_name = f"TASK 4 (Ablation: {n_feat} proxy rimosse)"
+            
+            MetricManager.print_summary(task_name, results_shap)
+            
+            if save_csv:
+                MetricManager.save_to_csv(task_name, model_type, results_shap, csv_path)
+
     print("=====================================================\n")
 
