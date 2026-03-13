@@ -9,3 +9,4 @@ class ConfigLoader:
         self.data = SimpleNamespace(**self.config['data'])
         self.experiment = SimpleNamespace(**self.config['experiment'])
         self.grid_search = SimpleNamespace(**self.config.get('grid_search'))
+        

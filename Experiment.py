@@ -4,14 +4,16 @@ import pandas as pd
 import numpy as np
 import os
 
-from ConfigLoader import ConfigLoader
 from DataLoader import DataLoader
 from MetricManager import MetricManager
 from ShapExplainer import ShapFactory
 from Classifier import LogisticRegressionClassifier, RandomForestClassifierModel
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+
 class Experiment:
-    def __init__(self, config_path):
-        self.config = ConfigLoader(config_path)
+    def __init__(self, config):
+        self.config = config
         self.data_loader = DataLoader(self.config)
         self.metric_manager = MetricManager()
 
@@ -30,25 +32,31 @@ class Experiment:
         classifier.train(X_train, y_train, model_save_path=save_path)
 
         # Divisione del test set per attributo di bias
-        mask_m = meta_test['sex'] == self.config.experiment.male_value
-        mask_f = meta_test['sex'] == self.config.experiment.female_value
+        bias_col = self.config.experiment.bias_attribute[0]
+        unique_vals = sorted(meta_test[bias_col].dropna().unique())
 
-        X_test_m = X_test[mask_m]
-        y_test_m = y_test[mask_m]
+        val_a = unique_vals[0]
+        val_b = unique_vals[1]
+        
+        mask_a = meta_test[bias_col] == val_a
+        mask_b = meta_test[bias_col] == val_b
 
-        X_test_f = X_test[mask_f]
-        y_test_f = y_test[mask_f]
+        X_test_a = X_test[mask_a]
+        y_test_a = y_test[mask_a]
 
-        preds_m = classifier.predict(X_test_m)
-        preds_f = classifier.predict(X_test_f)
+        X_test_b = X_test[mask_b]
+        y_test_b = y_test[mask_b]
+
+        preds_a = classifier.predict(X_test_a)
+        preds_b = classifier.predict(X_test_b)
 
         # Probabilità per calcolo AUROC
-        proba_m = classifier.predict_proba(X_test_m)[:, 1]
-        proba_f = classifier.predict_proba(X_test_f)[:, 1]
+        proba_a = classifier.predict_proba(X_test_a)[:, 1]
+        proba_b = classifier.predict_proba(X_test_b)[:, 1]
 
         # Gruppi per calcolo metriche
-        group_a = {'true': y_test_m, 'pred': preds_m, 'proba': proba_m}
-        group_b = {'true': y_test_f, 'pred': preds_f, 'proba': proba_f}
+        group_a = {'true': y_test_a, 'pred': preds_a, 'proba': proba_a}
+        group_b = {'true': y_test_b, 'pred': preds_b, 'proba': proba_b}
 
         results = self.metric_manager.compute_metrics(group_a, group_b)
         return results
@@ -80,7 +88,13 @@ class Experiment:
            # Divisione metadati        
            meta_test = meta_data.iloc[test_index]
 
-           checkpoint_path = f"checkpoints/{self.config.experiment.model_type}/base_case/fold_{fold}.joblib"
+           ds_name = self.config.data.current_dataset
+           target = self.config.experiment.target_column[0]
+           bias = self.config.experiment.bias_attribute[0]
+
+           base_dir = f"checkpoints/{self.config.experiment.model_type}/{ds_name}/{target}_{bias}/base_case"
+           os.makedirs(base_dir, exist_ok=True)
+           checkpoint_path = f"{base_dir}/fold_{fold}.joblib"
 
            metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=checkpoint_path)
            all_results.append(metrics)
@@ -120,7 +134,13 @@ class Experiment:
             X_train_male = X_train_full[train_male_mask]
             y_train_male = y_train_full[train_male_mask]
 
-            checkpoint_path = f"checkpoints/{self.config.experiment.model_type}/extreme_case/fold_{fold}.joblib"
+            ds_name = self.config.data.current_dataset
+            target = self.config.experiment.target_column[0]
+            bias = self.config.experiment.bias_attribute[0]
+
+            base_dir = f"checkpoints/{self.config.experiment.model_type}/{ds_name}/{target}_{bias}/extreme_case"
+            os.makedirs(base_dir, exist_ok=True)
+            checkpoint_path = f"{base_dir}/fold_{fold}.joblib"
 
             metrics = self.run_fold_logic(X_train_male, y_train_male, X_test, y_test, meta_test, save_path=checkpoint_path)
             all_results.append(metrics)
@@ -162,7 +182,15 @@ class Experiment:
             y_train, y_test = y[train_index], y[test_index]
 
             classifier = self._get_classifier()
-            checkpoint_path = f"checkpoints/{self.config.experiment.model_type}/counterfactual_case/fold_{fold}.joblib"
+
+            ds_name = self.config.data.current_dataset
+            target = self.config.experiment.target_column[0]
+            bias = self.config.experiment.bias_attribute[0]
+            
+            base_dir = f"checkpoints/{self.config.experiment.model_type}/{ds_name}/{target}_{bias}/counterfactual_case"
+            os.makedirs(base_dir, exist_ok=True)
+            checkpoint_path = f"{base_dir}/fold_{fold}.joblib"
+
             classifier.train(X_train, y_train, model_save_path=checkpoint_path)
 
             preds_original = classifier.predict(X_test)
@@ -194,11 +222,17 @@ class Experiment:
         y_sex = data["sex"].values
         model_type = self.config.experiment.model_type
 
+        ds_name = self.config.data.current_dataset
+        target = self.config.experiment.target_column[0]
+        bias = self.config.experiment.bias_attribute[0]
+        base_dir = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/shap_ablation"
+        os.makedirs(base_dir, exist_ok=True)
+
         classifier = self._get_classifier()
-        shap_model_path = f"checkpoints/{model_type}/shap_ablation/shap_detector_model.joblib"
+        shap_model_path = f"{base_dir}/shap_detector_model.joblib"
         classifier.train(X, y_sex, model_save_path=shap_model_path)
 
-        shap_cache_path = f"checkpoints/{model_type}/shap_ablation/feature_importance.csv"
+        shap_cache_path = f"{base_dir}/feature_importance.csv"
         force_retrain = getattr(self.config.experiment, 'force_retrain', False)
 
         if os.path.exists(shap_cache_path) and not force_retrain:
@@ -254,7 +288,7 @@ class Experiment:
             print(f"\n>> Step di Tuning: Rimozione delle Top {n_features} feature proxy")
 
             if save_embeddings:
-                features_list_path = f"checkpoints/{model_type}/shap_ablation/features_to_remove_{n_features}.csv"
+                features_list_path = f"{base_dir}/features_to_remove_{n_features}.csv"
                 
                 if os.path.exists(features_list_path) and not force_retrain:
                     pass 
@@ -283,7 +317,7 @@ class Experiment:
                 y_train, y_test = y_bal[train_index], y_bal[test_index]
                 meta_test = metadata.iloc[test_index]
 
-                checkpoint_path = f"checkpoints/{model_type}/shap_ablation/fold_{fold}_{n_features}_pruned.joblib"
+                checkpoint_path = f"{base_dir}/fold_{fold}_{n_features}_pruned.joblib"
                 
                 metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=checkpoint_path)
                 ablation_results.append(metrics)
@@ -291,3 +325,54 @@ class Experiment:
             all_ablation_results[n_features] = ablation_results
             
         return all_ablation_results
+    
+
+    def run_task_etnia(self, combined_data, fm_name):
+        print(f"Avvio Task 5 (Domain Shift) per {fm_name}...")
+
+        min_size = combined_data['dataset_label'].value_counts().min()
+
+        balanced_data = combined_data.groupby('dataset_label', group_keys=False).apply(
+            lambda x: x.sample(n=min_size, random_state=self.config.experiment.random_seed)
+        ).reset_index(drop=True)
+
+        cols_to_drop = getattr(self.config.data, 'cols_to_exclude', []) + ['dataset_label']
+        X = balanced_data.drop(columns=cols_to_drop, errors='ignore').values
+        y = balanced_data['dataset_label'].values
+
+        sss = StratifiedShuffleSplit(n_splits=self.config.experiment.n_splits,
+                                     test_size=self.config.experiment.test_size,
+                                     random_state=self.config.experiment.random_seed)
+        
+        accuracies = []
+
+        base_dir = f"checkpoints/{self.config.experiment.model_type}/Domain_Shift_{fm_name}/task5"
+        os.makedirs(base_dir, exist_ok=True)
+        
+        for fold, (train_index, test_index) in enumerate(sss.split(X, y)):
+            X_train, X_test = X[train_index], X[test_index]
+            y_train, y_test = y[train_index], y[test_index]
+
+            scaler = StandardScaler()
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
+
+            checkpoint_path = f"{base_dir}/fold_{fold}.joblib"
+
+            classifier = self._get_classifier()
+            classifier.train(X_train_scaled, y_train, model_save_path=checkpoint_path)
+
+            preds = classifier.predict(X_test_scaled)
+            accuracies.append(accuracy_score(y_test, preds))
+        
+        median_acc = np.median(accuracies)
+        q25 = np.percentile(accuracies, 25)
+        q75 = np.percentile(accuracies, 75)
+
+        return {
+            'median': median_acc,
+            'q25': q25,
+            'q75': q75
+        }    
+
+        

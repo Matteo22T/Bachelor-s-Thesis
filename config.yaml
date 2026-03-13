@@ -1,19 +1,42 @@
 data:
-  embeddings_path: "dataset/georgia/georgia_ecg-fm_max_pooled.csv"
-  metadata_path: "dataset/georgia/meta_dataset.csv"
+  foundation_models:
+    - name: "ECG-FM"
+      run: true
+      datasets:
+        - name: "georgia_ecgfm"
+          embedding_path: "dataset/georgia/georgia_ecg-fm_max_pooled.csv"
+          metadata_path: "dataset/georgia/meta_dataset.csv"
+          run: true
+        - name: "chapman_ecgfm"
+          embedding_path: "dataset/chapman-ningbo/chapman-ningbo_ecg-fm_max_pooled.csv"
+          metadata_path: "dataset/chapman-ningbo/meta_dataset.csv"
+          run: true
+
+    - name: "HuBERT"
+      run: true
+      datasets:
+        - name: "georgia_hubert_ecg_base"
+          embedding_path: "dataset/georgia/georgia_hubert-ecg-base_max_pooled.csv"
+          metadata_path: "dataset/georgia/meta_dataset.csv"
+          run: true
+        - name: "chapman_hubert_ecg_base"
+          embedding_path: "dataset/chapman-ningbo/chapman-ningbo_hubert-ecg-base_max_pooled.csv"
+          metadata_path: "dataset/chapman-ningbo/meta_dataset.csv"
+          run: true
+
   join_key: "ecg_id"
-  cols_to_exclude: ["ecg_id", "AF", "sex", "age", "SB", "STach", "CD"]
+  cols_to_exclude: ["ecg_id", "AF", "sex", "age", "SB", "STach", "CD", "TAb"]
   metadata_to_concatenate: []
 
 experiment:
 
-  model_type: "random_forest" # Opzioni: "random_forest", "logistic_regression"
+  model_type: "logistic_regression" # Opzioni: "random_forest", "logistic_regression"
   target_column: ["AF"]
   bias_attribute: ["sex"]
 
   force_retrain: false
 
-  save_results_csv: false
+  save_results_csv: true
   results_csv_path: "results/experiments_log.csv"
 
   save_filtered_embeddings: true
@@ -21,15 +44,19 @@ experiment:
   task1: false
   task2: false
   task3: false
-  task4: true
+  task4: false
+  task5: true
 
   random_seed: 42
   n_splits: 10
   test_size: 0.2
 
+  # per la matrice di correlazione
+  treshold: 0.98
+
 
   n_features_to_remove_shap: [25, 50, 75, 100, 150, 200, 300, 400, 512]
-  sample_size_shap: 200
+  sample_size_shap: 500
   
  
   male_value: 0

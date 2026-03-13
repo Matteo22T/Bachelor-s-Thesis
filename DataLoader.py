@@ -17,6 +17,19 @@ class DataLoader:
         metadata = pd.read_csv(self.config.data.metadata_path)
         return pd.merge(embeddings, metadata, on=self.config.data.join_key)
     
+    def load_multiple_datasets(self, datasets):
+        combined_data = []
+        for label, ds in enumerate(datasets):
+            embeddings = pd.read_csv(ds['embedding_path'])
+            metadata = pd.read_csv(ds['metadata_path'])
+            merged = pd.merge(embeddings, metadata, on=self.config.data.join_key)
+
+            merged['dataset_label'] = label
+            combined_data.append(merged)
+        
+        return pd.concat(combined_data, ignore_index=True)
+
+    
     def balance_model(self, data):
         strategy = getattr(self.config.experiment, 'balancing_strategy', None)
         target_col = self.config.experiment.target_column[0]

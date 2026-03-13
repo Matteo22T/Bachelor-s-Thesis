@@ -125,7 +125,7 @@ class MetricManager:
 
     
     @staticmethod
-    def save_to_csv(task_name, model_type, results_list, csv_path):
+    def save_to_csv(dataset_name, target_column, bias_attribute, task_name, model_type, results_list, csv_path):
         """Salva i risultati aggregati (Mediana) in un file CSV in modalità append."""
         if not results_list:
             return
@@ -159,6 +159,9 @@ class MetricManager:
         # Creazione della riga di log
         row = {
             'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'Dataset': dataset_name,
+            'Target_Column': target_column,
+            'Bias_Attribute': bias_attribute,
             'Model': model_type,
             'Task': task_name,
             
@@ -210,3 +213,25 @@ class MetricManager:
         # Salvataggio: se il file esiste già aggiunge la riga (append), altrimenti lo crea con l'header
         file_exists = os.path.exists(csv_path)
         df.to_csv(csv_path, mode='a', index=False, header=not file_exists)
+
+
+    @staticmethod
+    def save_domain_shift_to_csv(fm_name, model_type, task5_results, csv_path="results/domain_shift_log.csv"):
+        if not task5_results:
+            return
+
+        row = {
+            'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'Foundation_Model': fm_name,
+            'Model_Type': model_type,
+            'Accuracy_Med': round(task5_results['median'] * 100, 2),
+            'Accuracy_Q1': round(task5_results['q25'] * 100, 2),
+            'Accuracy_Q3': round(task5_results['q75'] * 100, 2)
+        }
+        
+        df_domain = pd.DataFrame([row])
+        
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+        
+        file_exists = os.path.exists(csv_path)
+        df_domain.to_csv(csv_path, mode='a', index=False, header=not file_exists)
