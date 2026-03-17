@@ -1,0 +1,9 @@
+REPORT RIDONDANZA EMBEDDING
+Foundation Model: ECG-FM
+Dataset: chapman_ecgfm
+Soglia: 0.98
+------------------------------
+Totale Feature: 768
+Feature Ridondanti da scartare: 0
+
+Elenco feature:

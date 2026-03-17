@@ -1,0 +1,3 @@
+Timestamp,Foundation_Model,Model_Type,Accuracy_Med,Accuracy_Q1,Accuracy_Q3
+2026-03-13 12:52:05,ECG-FM,logistic_regression,94.96,94.93,95.05
+2026-03-13 12:52:11,HuBERT,logistic_regression,99.98,99.93,99.98

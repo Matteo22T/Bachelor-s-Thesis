@@ -26,7 +26,6 @@ if __name__ == "__main__":
 
     for fm in foundation_models:
         if not fm.get("run", True):
-            print(f"\n[SKIP] Foundation Model {fm.get('name', 'Sconosciuto')} saltato per configurazione.\n")
             continue
 
         print(f"\n{'='*80}")
@@ -42,7 +41,6 @@ if __name__ == "__main__":
             print(f"{'='*80}\n")
 
             if not dataset.get("run", True):
-                print(f"   [SKIP] Dataset {dataset['name']} saltato per configurazione.\n")
                 continue
 
             ds_name = dataset['name']
@@ -58,15 +56,10 @@ if __name__ == "__main__":
             loader_iniziale = DataLoader(temp_config)
             data = loader_iniziale.load_data()
 
+            data = loader_iniziale.filter_correlated_features(data)
+
             for target_col in target_columns:
                 for bias_attr in bias_attributes:
-
-                    print(f"\n{'='*70}")
-                    print(f"🚀 AVVIO ESPERIMENTO")
-                    print(f"   Dataset: {ds_name}")
-                    print(f"   Target:  {target_col}")
-                    print(f"   Bias:    {bias_attr}")
-                    print(f"{'='*70}\n")
 
                     current_config = copy.deepcopy(config)
 
@@ -113,6 +106,11 @@ if __name__ == "__main__":
                             if save_csv:
                                 MetricManager.save_to_csv(ds_name, target_col, bias_attr, task_name, model_type, results_shap, csv_path)
 
+                    if config.experiment.task6:
+                        exp_corr = Experiment(config)
+                        exp_corr.run_correlation_analysis(full_data, fm["name"], ds_name)
+
+
                     print("=====================================================\n")
             
         if config.experiment.task5:
@@ -122,6 +120,8 @@ if __name__ == "__main__":
 
                 loader = DataLoader(config)
                 combined_data = loader.load_multiple_datasets(ds)
+
+                combined_data = loader.filter_correlated_features(combined_data)
 
                 exp2 = Experiment(config)
                 task5_results = exp2.run_task_etnia(combined_data, fm["name"])
@@ -133,7 +133,4 @@ if __name__ == "__main__":
                         task5_results=task5_results
                     )
 
-            else:
-                print(f"\n[SKIP] Task 5 saltato perché non ci sono più dataset da combinare per il foundation model {fm['name']}.\n")
-        else:
-            print(f"\n[SKIP] Task 5 saltato per configurazione.\n")
+        

@@ -67,3 +67,22 @@ class DataLoader:
             X_final = X_scaled
 
         return X_final, data[target_col].values
+    
+
+
+    def filter_correlated_features(self, data):
+        if not self.config.experiment.remove_correlated_features:
+            return data
+
+        features = data.drop(columns=self.config.data.cols_to_exclude, errors='ignore')
+        corr_matrix = features.corr().abs()
+        upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+
+        to_drop = [column for column in upper_tri.columns if any(upper_tri[column] > self.config.experiment.correlation_threshold)]
+        print(f"Rimozione di {len(to_drop)} feature altamente correlate: {to_drop}")
+        if len(to_drop) > 0:
+            print(f"   [INFO] Rimosse {len(to_drop)} feature ridondanti (> {self.config.experiment.correlation_threshold}).")
+            return data.drop(columns=to_drop)
+        else:
+            print("   [INFO] Nessuna feature ridondante trovata in questo dataset.")
+            return data

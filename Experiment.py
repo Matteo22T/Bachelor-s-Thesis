@@ -3,6 +3,8 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 import numpy as np
 import os
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from DataLoader import DataLoader
 from MetricManager import MetricManager
@@ -376,3 +378,45 @@ class Experiment:
         }    
 
         
+    def run_correlation_analysis(self, data, fm_name, ds_name):
+        print("Avvio Task 6: Analisi Correlazione tra Feature e Attributo di Bias...")
+
+        features = data.drop(columns=self.config.data.cols_to_exclude, errors='ignore')
+        corr_matrix = features.corr().abs()
+        upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+
+        threshold = self.config.experiment.correlation_threshold
+        to_drop = [column for column in upper_tri.columns if any(upper_tri[column] > threshold)]
+
+        total_features = len(features.columns)
+        num_redundant = len(to_drop)
+
+        base_dir = f"results/correlation_analysis/{fm_name}/{ds_name}"
+        os.makedirs(base_dir, exist_ok=True)
+
+        report_path = f"{base_dir}/redundancy_report.txt"
+        with open(report_path, "w") as f:
+            f.write(f"REPORT RIDONDANZA EMBEDDING\n")
+            f.write(f"Foundation Model: {fm_name}\nDataset: {ds_name}\n")
+            f.write(f"Soglia: {threshold}\n{'-'*30}\n")
+            f.write(f"Totale Feature: {total_features}\n")
+            f.write(f"Feature Ridondanti da scartare: {num_redundant}\n\n")
+            f.write("Elenco feature:\n" + ", ".join(to_drop))
+            
+        try:
+            max_corrs = upper_tri.max()
+            plt.figure(figsize=(10, 6))
+            sns.histplot(max_corrs.dropna(), bins=50, kde=True, color='royalblue')
+            plt.axvline(x=threshold, color='red', linestyle='--', linewidth=2, label=f'Soglia Critica ({threshold})')
+            plt.title(f'Ridondanza Embedding: {fm_name} | {ds_name}')
+            plt.xlabel('Correlazione Massima')
+            plt.ylabel('Numero di Feature')
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig(f"{base_dir}/correlation_histogram.png", dpi=300)
+            plt.close()
+        except Exception as e:
+            print(f"   [WARN] Errore nel grafico: {e}")
+
+        return to_drop
+ 
