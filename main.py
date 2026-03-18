@@ -111,7 +111,22 @@ if __name__ == "__main__":
                         exp_corr.run_correlation_analysis(full_data, fm["name"], ds_name)
 
 
+                    if config.experiment.task7:
+                        results_eff_dict = exp.run_shap_efficiency_analysis(full_data)
+                        
+                        for n_rem, results_eff in results_eff_dict.items():
+                            task_label = f"TASK 7 (Efficienza: -{n_rem} feature)"
+                            MetricManager.print_summary(task_label, results_eff)
+                            if save_csv:
+                                MetricManager.save_to_csv(ds_name, target_col, bias_attr, task_label, model_type, results_eff, csv_path)
+
+
+                    if config.experiment.runOverlapAnalysis:
+                        exp.run_final_overlap_analysis()
+
                     print("=====================================================\n")
+
+
             
         if config.experiment.task5:
             ds = [d for d in datasets if d.get("run", True)]
@@ -133,4 +148,4 @@ if __name__ == "__main__":
                         task5_results=task5_results
                     )
 
-        
+    

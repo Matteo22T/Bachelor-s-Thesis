@@ -22,7 +22,7 @@ data:
         - name: "chapman_hubert_ecg_base"
           embedding_path: "dataset/chapman-ningbo/chapman-ningbo_hubert-ecg-base_max_pooled.csv"
           metadata_path: "dataset/chapman-ningbo/meta_dataset.csv"
-          run: true
+          run: false
 
   join_key: "ecg_id"
   cols_to_exclude: ["ecg_id", "AF", "sex", "age", "SB", "STach", "CD", "TAb"]
@@ -46,7 +46,9 @@ experiment:
   task3: false
   task4: false
   task5: false
-  task6: true
+  task6: false
+  task7: false
+  runOverlapAnalysis: false
 
   random_seed: 42
   n_splits: 10
@@ -58,6 +60,15 @@ experiment:
 
   n_features_to_remove_shap: [25, 50, 75, 100, 150, 200, 300, 400, 512]
   sample_size_shap: 500
+
+  n_features_to_remove_shap_efficiency: [150, 200, 250, 300, 400, 512, 600, 650, 700, 758]
+
+  georgia_ecgfm:
+      best_t4: 25
+      best_t7: 650
+  georgia_hubert_ecg_base:
+      best_t4: 50
+      best_t7: 512
   
  
   male_value: 0
@@ -68,7 +79,7 @@ experiment:
 
 
 grid_search:
-  enabled: false
+  enabled: true
   cv_splits: 10
 
 

@@ -420,3 +420,150 @@ class Experiment:
 
         return to_drop
  
+        
+    def run_shap_efficiency_analysis(self, data):
+        print("Avvio Task 7: Analisi Efficienza SHAP...")
+
+        model_type = self.config.experiment.model_type
+        ds_name = self.config.data.current_dataset
+        target = self.config.experiment.target_column[0]
+        bias = self.config.experiment.bias_attribute[0]
+
+        base_dir = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/efficiency_ablation"
+        os.makedirs(base_dir, exist_ok=True)
+
+        X, y = self.data_loader.prepare_features(data, train=True)
+        force_retrain = getattr(self.config.experiment, 'force_retrain', False)
+
+        shap_cache_path = f"{base_dir}/target_feature_importance.csv"
+
+        if os.path.exists(shap_cache_path) and not force_retrain:
+            print(f"   [INFO] Caricamento classifica feature dalla cache: {shap_cache_path}")
+            feature_importance = pd.read_csv(shap_cache_path)
+        else:
+            print("   [INFO] Calcolo SHAP sulla Target Column per determinare l'importanza clinica...")
+            classifier_detector = self._get_classifier()
+            classifier_detector.train(X, y)
+
+            shap_strategy = ShapFactory.get_explainer(model_type)
+
+            sample_size = self.config.experiment.sample_size_shap
+            X_sample = X[:sample_size] if sample_size < len(X) else X
+            
+            shap_values = shap_strategy.get_shap_values(classifier_detector.model, X_sample)
+
+            if isinstance(shap_values, list): shap_values = shap_values[1]
+            elif len(np.shape(shap_values)) == 3: shap_values = shap_values[:, :, 1]
+
+            vals = np.abs(shap_values).mean(0)
+            feature_importance = pd.DataFrame(list(zip(range(len(vals)), vals)), columns=['feature_idx', 'importance'])
+
+            feature_importance.sort_values(by='importance', ascending=False, inplace=True)
+            feature_importance.to_csv(shap_cache_path, index=False)
+        
+        balanced_data = self.data_loader.balance_model(data)
+        X_bal, y_bal = self.data_loader.prepare_features(balanced_data, train=True)
+        all_features_idxs = np.arange(X_bal.shape[1])
+        feature_cols_names = balanced_data.drop(columns=self.config.data.cols_to_exclude, errors='ignore').columns
+
+        n_to_remove_list = self.config.experiment.n_features_to_remove_shap_efficiency
+        all_efficiency_results = {}
+
+        for n_remove in n_to_remove_list:
+            bottom_features = feature_importance['feature_idx'].tail(n_remove).values
+            features_to_keep = np.setdiff1d(all_features_idxs, bottom_features)
+
+            print(f"\n>> Step: Test con {len(features_to_keep)} feature (Rimosse {n_remove} meno rilevanti)")
+
+            removed_names_path = f"{base_dir}/removed_features_{n_remove}.csv"
+            if not os.path.exists(removed_names_path) or force_retrain:
+                pd.DataFrame({'removed_feature': feature_cols_names[bottom_features]}).to_csv(removed_names_path, index=False)
+
+            X_pruned = X_bal[:, features_to_keep]
+            
+            sss = StratifiedShuffleSplit(n_splits=self.config.experiment.n_splits, 
+                                        test_size=self.config.experiment.test_size, 
+                                        random_state=self.config.experiment.random_seed)
+            
+            step_results = []
+            for fold, (train_index, test_index) in enumerate(sss.split(X_pruned, y_bal)):
+                X_train, X_test = X_pruned[train_index], X_pruned[test_index]
+                y_train, y_test = y_bal[train_index], y_bal[test_index]
+                meta_test = balanced_data.iloc[test_index]
+
+                checkpoint_path = f"{base_dir}/fold_{fold}_{n_remove}_removed.joblib"
+                
+                # run_fold_logic gestisce internamente il caricamento se il file esiste
+                metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=checkpoint_path)
+                step_results.append(metrics)
+                
+            all_efficiency_results[n_remove] = step_results
+            
+        return all_efficiency_results
+    
+
+
+    def compare_features(self, task4_n, task7_n):
+        ds_name = self.config.data.current_dataset
+        model_type = self.config.experiment.model_type
+        target = self.config.experiment.target_column[0] if isinstance(self.config.experiment.target_column, list) else self.config.experiment.target_column
+        bias = self.config.experiment.bias_attribute[0] if isinstance(self.config.experiment.bias_attribute, list) else self.config.experiment.bias_attribute
+
+        current_emb_path = None
+        for fm in self.config.data.foundation_models:
+            datasets_list = fm.get('datasets', [])
+            for ds in datasets_list:
+                if ds.get('name') == ds_name:
+                    current_emb_path = ds.get('embedding_path')
+                    break
+            if current_emb_path: break
+
+        if not current_emb_path:
+            print(f"⚠️ [!] Path embedding non trovato per {ds_name}")
+            return set()
+
+        path_t4 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/shap_ablation/features_to_remove_{task4_n}.csv"
+        path_t7 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/efficiency_ablation/removed_features_{task7_n}.csv"
+        
+        try:
+            
+            df_emb = pd.read_csv(current_emb_path)
+            all_features = set([c for c in df_emb.columns if c not in self.config.data.cols_to_exclude])
+            
+            feat_t4_proxies = set(pd.read_csv(path_t4)['feature_to_remove'].tolist())
+            
+            feat_t7_removed = set(pd.read_csv(path_t7)['removed_feature'].tolist())
+            
+            feat_t7_kept = all_features - feat_t7_removed
+            
+            intersection = feat_t4_proxies.intersection(feat_t7_kept)
+            
+            print(f" ANALISI DEL CONFLITTO: {self.config.data.current_dataset}")
+            print(f" Feature totali embedding: {len(all_features)}")
+            print(f" Feature rimosse embedding: {len(feat_t7_removed)}")
+            print(f" Feature Proxy (Sesso): {len(feat_t4_proxies)}")
+            print(f" Feature Core Clinico (AF): {len(feat_t7_kept)}")
+            print(f" --------------------------------------")
+            print(f" FEATURE IN CONFLITTO: {len(intersection)}")
+            print(f" Impatto: {len(intersection)/len(feat_t4_proxies)*100:.2f}% delle proxy sono essenziali.")
+            
+            return intersection
+
+        except Exception as e:
+            print(f" Errore nel confronto: {e}")
+            return set()
+        
+
+    def run_final_overlap_analysis(self):
+        ds_name = self.config.data.current_dataset
+        
+        if hasattr(self.config.experiment, ds_name):
+            ds_config = getattr(self.config.experiment, ds_name)
+            t4_n = ds_config.get('best_t4')
+            t7_n = ds_config.get('best_t7')
+            
+            if t4_n and t7_n:
+                return self.compare_features(task4_n=t4_n, task7_n=t7_n)
+        
+        print(f" Nessun parametro definito nel config per {ds_name}. Salto.")
+        return None
