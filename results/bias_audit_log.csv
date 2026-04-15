@@ -1,5 +1,9 @@
 Timestamp,Dataset,Model_Type,Accuracy_Med,Accuracy_Q1,Accuracy_Q3,F1_Score_Med,F1_Score_Q1,F1_Score_Q3,AUC_Med,AUC_Q1,AUC_Q3
-2026-04-15 13:50:54,georgia_ecgfm,random_forest,68.75,68.01,69.94,0.7017,0.6933,0.7129,0.7364,0.7299,0.7593
-2026-04-15 13:51:04,chapman_ecgfm,random_forest,71.62,70.73,72.76,0.7244,0.7128,0.7328,0.7933,0.7838,0.8068
-2026-04-15 13:51:07,georgia_hubert_ecg_base,random_forest,59.52,57.44,62.35,0.5923,0.5831,0.5989,0.6163,0.601,0.6311
-2026-04-15 13:51:16,chapman_hubert_ecg_base,random_forest,63.09,60.81,63.64,0.6312,0.6143,0.6463,0.6815,0.6558,0.6867
+2026-04-15 15:14:25,georgia_ecgfm,logistic_regression,68.75,66.22,71.73,0.7008,0.6705,0.7288,0.7601,0.7271,0.7703
+2026-04-15 15:14:33,chapman_ecgfm,logistic_regression,75.76,74.7,76.52,0.7604,0.7478,0.7678,0.8298,0.8239,0.8367
+2026-04-15 15:14:35,georgia_hubert_ecg_base,logistic_regression,57.44,55.21,59.67,0.5724,0.5667,0.582,0.6139,0.5898,0.6288
+2026-04-15 15:14:42,chapman_hubert_ecg_base,logistic_regression,61.4,60.47,61.99,0.619,0.6079,0.6231,0.6627,0.6546,0.6763
+2026-04-15 15:17:12,georgia_ecgfm,random_forest,67.86,65.77,70.09,0.6953,0.6752,0.7198,0.7393,0.7214,0.7648
+2026-04-15 15:17:32,chapman_ecgfm,random_forest,70.95,70.61,72.04,0.7132,0.7013,0.7225,0.7939,0.7797,0.7984
+2026-04-15 15:17:38,georgia_hubert_ecg_base,random_forest,59.82,57.89,60.71,0.5777,0.5718,0.5972,0.6266,0.5976,0.6367
+2026-04-15 15:17:56,chapman_hubert_ecg_base,random_forest,62.16,61.02,63.3,0.6269,0.6231,0.6413,0.6705,0.6551,0.6758

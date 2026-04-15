@@ -43,13 +43,13 @@ experiment:
 
   task1: false
   task2: false
-  task3: false
+  task3: true
   task4: false
   task5: false
   task6: false
   task7: false
   task8: false
-  task9: true
+  task9: false
 
   random_seed: 42
   n_splits: 10
@@ -64,19 +64,38 @@ experiment:
 
   n_features_to_remove_shap_efficiency: [150, 200, 250, 300, 400, 512, 600, 650, 700, 758]
 
+  # Best Parameters per Dataset e Modello (Ottimizzati su F1-Score)
   georgia_ecgfm:
+    logistic_regression:
       best_t4: 25
       best_t7: 650
-  georgia_hubert_ecg_base:
+    random_forest:
       best_t4: 50
-      best_t7: 512
-  chapman_ecgfm:
-      best_t4: 25
-      best_t7: 650
-  chapman_hubert_ecg_base:
-      best_t4: 100
       best_t7: 600
-  
+
+  chapman_ecgfm:
+    logistic_regression:
+      best_t4: 25
+      best_t7: 700
+    random_forest:
+      best_t4: 25
+      best_t7: 700
+
+  georgia_hubert_ecg_base:
+    logistic_regression:
+      best_t4: 25
+      best_t7: 512
+    random_forest:
+      best_t4: 25
+      best_t7: 400
+
+  chapman_hubert_ecg_base:
+    logistic_regression:
+      best_t4: 100
+      best_t7: 400
+    random_forest:
+      best_t4: 100
+      best_t7: 400
  
   male_value: 0
   female_value: 1

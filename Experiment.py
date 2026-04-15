@@ -554,21 +554,32 @@ class Experiment:
             print(f" Errore nel confronto: {e}")
             return set()
         
-   #Task 8 
+    #Task 8 
     def run_overlap_analysis(self, data):
         print("\n" + "="*50)
         print("AVVIO TASK 8: MITIGAZIONE CONFLITTI BIAS-CLINICA")
         print("="*50)
 
         ds_name = self.config.data.current_dataset
+        model_type = self.config.experiment.model_type
         if not hasattr(self.config.experiment, ds_name):
             print(f"Parametri 'best' non trovati per {ds_name}. Task 8 annullato.")
             return None
         
         ds_config = getattr(self.config.experiment, ds_name)
+
+        if model_type in ds_config:
+            print(f"   [INFO] Caricamento parametri 'best' per {ds_name} - {model_type}")
+            model_params = ds_config[model_type]
+            best_n_t4 = model_params['best_t4']
+            best_n_t7 = model_params['best_t7']
+        else:
+            print(f" [!] Parametri per {model_type} non trovati in {ds_name}. Task 8 annullato.")
+            return None
+
         conflict_features = self.compare_features(
-            task4_n=ds_config.get('best_t4'), 
-            task7_n=ds_config.get('best_t7')
+            task4_n=best_n_t4,
+            task7_n=best_n_t7
         )
 
         if not conflict_features:
@@ -610,7 +621,7 @@ class Experiment:
             
         return results
     
-
+    #Task 9
     def run_bias_audit(self, data):
         print("\n" + "="*50)
         print("AVVIO TASK 9: AUDIT SUL BIAS")
@@ -618,15 +629,28 @@ class Experiment:
         print("="*50)
 
         ds_name = self.config.data.current_dataset
+        model_type = self.config.experiment.model_type
         if not hasattr(self.config.experiment, ds_name):
             print(f"Parametri 'best' non trovati per {ds_name}. Salto.")
             return None
         
         ds_config = getattr(self.config.experiment, ds_name)
+
+        if model_type in ds_config:
+            #print(f"Caricamento parametri 'best' per {ds_name} - {model_type}")
+            model_params = ds_config[model_type]
+            best_n_t4 = model_params['best_t4']
+            best_n_t7 = model_params['best_t7']
+        else:
+            #print(f" Parametri per {model_type} non trovati in {ds_name}. Task 8 annullato.")
+            return None
+
         conflict_features = self.compare_features(
-            task4_n=ds_config.get('best_t4'), 
-            task7_n=ds_config.get('best_t7')
+            task4_n=best_n_t4,
+            task7_n=best_n_t7
         )
+
+        
 
         bias_col = self.config.experiment.bias_attribute[0]
         balanced_data = self.data_loader.balance_model(data)
@@ -639,7 +663,7 @@ class Experiment:
         features_to_keep = np.setdiff1d(all_indices, conflict_indices)
 
         X_clean = X_full[:, features_to_keep]
-        print(f"Test di 'cecità' su {X_clean.shape[1]} feature superstiti.")
+        #print(f" su {X_clean.shape[1]} feature superstiti.")
 
         model_type = self.config.experiment.model_type
         target_col = self.config.experiment.target_column[0]
