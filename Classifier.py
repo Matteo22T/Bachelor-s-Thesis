@@ -35,7 +35,7 @@ class Classifier(ABC):
         if do_grid_search:
             param_grid = self._get_params_grid()
             if param_grid:
-                #print(f"   [GridSearch] Ottimizzazione in corso... ", end="", flush=True)
+                print(f"   [GridSearch] Ottimizzazione in corso... ", end="", flush=True)
                 
                 cv_splits = getattr(self.config.grid_search, 'cv_splits', 3)
                 
@@ -49,7 +49,7 @@ class Classifier(ABC):
                 
                 # Il modello diventa il "miglior stimatore" trovato
                 self.model = grid.best_estimator_
-                #print(f"Fatto. Best params: {grid.best_params_}")
+                print(f"Fatto. Best params: {grid.best_params_}")
             else:
                 self.model.fit(X, y)
         else:
@@ -67,14 +67,26 @@ class Classifier(ABC):
     
 class LogisticRegressionClassifier(Classifier):
     def _build_model(self):
-        return LogisticRegression(random_state=self.config.experiment.random_seed, max_iter=1000)
+        return LogisticRegression(
+            C=0.01, 
+            solver='liblinear', 
+            penalty='l2', 
+            max_iter=100, 
+            random_state=self.config.experiment.random_seed
+        )
     
     def _get_params_grid(self):
         return self.config.grid_search.logistic_regression
     
 class RandomForestClassifierModel(Classifier):
     def _build_model(self):
-        return RandomForestClassifier(random_state=self.config.experiment.random_seed)
+        return RandomForestClassifier(
+            n_estimators=200,      
+            max_depth=20,          
+            min_samples_split=5,   
+            random_state=self.config.experiment.random_seed,
+            n_jobs=-1
+        )
     
     def _get_params_grid(self):
         return self.config.grid_search.random_forest

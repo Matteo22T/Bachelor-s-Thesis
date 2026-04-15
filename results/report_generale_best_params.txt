@@ -1,0 +1,181 @@
+=== REPORT GENERALE BEST PARAMS (RF & LR) ===
+
+Analisi del file: checkpoints/random_forest/georgia_ecgfm/AF_sex/base_case/fold_0.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      100
+ - max_depth:         20
+ - min_samples_split: 5
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/georgia_ecgfm/AF_sex/base_case/fold_1.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         20
+ - min_samples_split: 2
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/georgia_ecgfm/AF_sex/base_case/fold_2.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         20
+ - min_samples_split: 5
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/chapman_ecgfm/AF_sex/base_case/fold_0.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      100
+ - max_depth:         10
+ - min_samples_split: 10
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/chapman_ecgfm/AF_sex/base_case/fold_1.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         10
+ - min_samples_split: 5
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/chapman_ecgfm/AF_sex/base_case/fold_2.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         20
+ - min_samples_split: 5
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/georgia_hubert_ecg_base/AF_sex/base_case/fold_0.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         10
+ - min_samples_split: 5
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/georgia_hubert_ecg_base/AF_sex/base_case/fold_1.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         20
+ - min_samples_split: 5
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/georgia_hubert_ecg_base/AF_sex/base_case/fold_2.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         20
+ - min_samples_split: 2
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/chapman_hubert_ecg_base/AF_sex/base_case/fold_0.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         20
+ - min_samples_split: 10
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/chapman_hubert_ecg_base/AF_sex/base_case/fold_1.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         20
+ - min_samples_split: 5
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/random_forest/chapman_hubert_ecg_base/AF_sex/base_case/fold_2.joblib
+Modello: RandomForestClassifier
+ - n_estimators:      200
+ - max_depth:         10
+ - min_samples_split: 5
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/georgia_ecgfm/AF_sex/base_case/fold_0.joblib
+Modello: LogisticRegression
+ - C:        0.01
+ - solver:   lbfgs
+ - penalty:  l2
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/georgia_ecgfm/AF_sex/base_case/fold_1.joblib
+Modello: LogisticRegression
+ - C:        0.1
+ - solver:   liblinear
+ - penalty:  l1
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/georgia_ecgfm/AF_sex/base_case/fold_2.joblib
+Modello: LogisticRegression
+ - C:        0.1
+ - solver:   liblinear
+ - penalty:  l1
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/chapman_ecgfm/AF_sex/base_case/fold_0.joblib
+Modello: LogisticRegression
+ - C:        0.01
+ - solver:   liblinear
+ - penalty:  l2
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/chapman_ecgfm/AF_sex/base_case/fold_1.joblib
+Modello: LogisticRegression
+ - C:        0.01
+ - solver:   liblinear
+ - penalty:  l2
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/chapman_ecgfm/AF_sex/base_case/fold_2.joblib
+Modello: LogisticRegression
+ - C:        0.01
+ - solver:   lbfgs
+ - penalty:  l2
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/georgia_hubert_ecg_base/AF_sex/base_case/fold_0.joblib
+Modello: LogisticRegression
+ - C:        0.01
+ - solver:   liblinear
+ - penalty:  l2
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/georgia_hubert_ecg_base/AF_sex/base_case/fold_1.joblib
+Modello: LogisticRegression
+ - C:        0.01
+ - solver:   lbfgs
+ - penalty:  l2
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/georgia_hubert_ecg_base/AF_sex/base_case/fold_2.joblib
+Modello: LogisticRegression
+ - C:        0.01
+ - solver:   liblinear
+ - penalty:  l2
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/chapman_hubert_ecg_base/AF_sex/base_case/fold_0.joblib
+Modello: LogisticRegression
+ - C:        0.01
+ - solver:   liblinear
+ - penalty:  l2
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/chapman_hubert_ecg_base/AF_sex/base_case/fold_1.joblib
+Modello: LogisticRegression
+ - C:        0.1
+ - solver:   liblinear
+ - penalty:  l1
+ - max_iter: 100
+--------------------------------------------------------------------------------
+
+Analisi del file: checkpoints/logistic_regression/chapman_hubert_ecg_base/AF_sex/base_case/fold_2.joblib
+Modello: LogisticRegression
+ - C:        0.01
+ - solver:   lbfgs
+ - penalty:  l2
+ - max_iter: 100
+--------------------------------------------------------------------------------

@@ -235,3 +235,19 @@ class MetricManager:
         
         file_exists = os.path.exists(csv_path)
         df_domain.to_csv(csv_path, mode='a', index=False, header=not file_exists)
+
+
+    def save_bias_audit_to_csv(ds_name, model_type, audit_acc, csv_path="results/bias_audit_log.csv"):
+        row = {
+            'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'Dataset': ds_name,
+            'Model_Type': model_type,
+            'Audit_Accuracy': round(audit_acc * 100, 2)
+        }
+        
+        df_audit = pd.DataFrame([row])
+        
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+        
+        file_exists = os.path.exists(csv_path)
+        df_audit.to_csv(csv_path, mode='a', index=False, header=not file_exists)

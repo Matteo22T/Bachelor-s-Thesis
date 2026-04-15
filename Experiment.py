@@ -18,7 +18,7 @@ class Experiment:
         self.config = config
         self.data_loader = DataLoader(self.config)
         self.metric_manager = MetricManager()
-
+ 
     def _get_classifier(self):
         model_type = self.config.experiment.model_type
         if model_type == "random_forest":
@@ -64,7 +64,7 @@ class Experiment:
         return results
     
 
-    # Caso Base: Addestramento su dati bilanciati di entrambi i sessi e inferenza su entrambi i sessi separatamente.
+    # Task 1 Caso Base: Addestramento su dati bilanciati di entrambi i sessi e inferenza su entrambi i sessi separatamente.
     # Obiettivo: Valutare performance e bias in condizioni standard.
     def run_base_case(self,data):
        print("Avvio caso base...")
@@ -107,7 +107,7 @@ class Experiment:
 
        return all_results
     
-    #Caso Estremo: Addestramento solo su un sesso (es. maschi) e inferenza su entrambi i sessi separatamente.
+    #Task 2Caso Estremo: Addestramento solo su un sesso (es. maschi) e inferenza su entrambi i sessi separatamente.
     #Obiettivo: Vedere quanto il modello "soffre" se non vede mai una donna durante lo studio.
     def run_extreme_case(self, data):
         print("Avvio caso estremo...")
@@ -153,7 +153,7 @@ class Experiment:
         return all_results
 
 
-    # Caso Controfattuale: Misura la percentuale di campioni il cui risultato predetto cambia quando si inverte l'attributo di bias. 
+    #Task 3 Caso Controfattuale: Misura la percentuale di campioni il cui risultato predetto cambia quando si inverte l'attributo di bias. 
     # Obiettivo: Valutare la robustezza del modello rispetto a cambiamenti nell'attributo di bias.
     def run_counterfactual_case(self, data):
         print("Avvio caso controfattuale...")
@@ -216,7 +216,7 @@ class Experiment:
         return 
     
 
-
+    #Task 4
     def run_shap_analysis(self,data):
         print("--- Avvio Analisi SHAP e Rimozione Feature (Task 4) ---")
 
@@ -323,12 +323,14 @@ class Experiment:
                 
                 metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=checkpoint_path)
                 ablation_results.append(metrics)
+
+                print(f"Fold {fold + 1}/{self.config.experiment.n_splits} completato con {n_features} feature rimosse.")
                 
             all_ablation_results[n_features] = ablation_results
             
         return all_ablation_results
     
-
+    #Task 5
     def run_task_etnia(self, combined_data, fm_name):
         print(f"Avvio Task 5 (Domain Shift) per {fm_name}...")
 
@@ -377,7 +379,7 @@ class Experiment:
             'q75': q75
         }    
 
-        
+    #Task 6 
     def run_correlation_analysis(self, data, fm_name, ds_name):
         print("Avvio Task 6: Analisi Correlazione tra Feature e Attributo di Bias...")
 
@@ -420,7 +422,7 @@ class Experiment:
 
         return to_drop
  
-        
+    #Task 7   
     def run_shap_efficiency_analysis(self, data):
         print("Avvio Task 7: Analisi Efficienza SHAP...")
 
@@ -519,7 +521,7 @@ class Experiment:
             if current_emb_path: break
 
         if not current_emb_path:
-            print(f"⚠️ [!] Path embedding non trovato per {ds_name}")
+            print(f" [!] Path embedding non trovato per {ds_name}")
             return set()
 
         path_t4 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/shap_ablation/features_to_remove_{task4_n}.csv"
@@ -553,17 +555,110 @@ class Experiment:
             print(f" Errore nel confronto: {e}")
             return set()
         
+   #Task 8 
+    def run_overlap_analysis(self, data):
+        print("\n" + "="*50)
+        print("AVVIO TASK 8: MITIGAZIONE CONFLITTI BIAS-CLINICA")
+        print("="*50)
 
-    def run_final_overlap_analysis(self):
         ds_name = self.config.data.current_dataset
+        if not hasattr(self.config.experiment, ds_name):
+            print(f"Parametri 'best' non trovati per {ds_name}. Task 8 annullato.")
+            return None
         
-        if hasattr(self.config.experiment, ds_name):
-            ds_config = getattr(self.config.experiment, ds_name)
-            t4_n = ds_config.get('best_t4')
-            t7_n = ds_config.get('best_t7')
+        ds_config = getattr(self.config.experiment, ds_name)
+        conflict_features = self.compare_features(
+            task4_n=ds_config.get('best_t4'), 
+            task7_n=ds_config.get('best_t7')
+        )
+
+        if not conflict_features:
+            print("Nessuna feature in conflitto trovata. Inutile procedere con l'ablazione.")
+            return None
+
+        balanced_data = self.data_loader.balance_model(data)
+        X_bal, y_bal = self.data_loader.prepare_features(balanced_data, train=True)
+        
+        # Mappo i nomi delle colonne per trovare gli indici da rimuovere
+        feature_cols = balanced_data.drop(columns=self.config.data.cols_to_exclude, errors='ignore').columns
+        conflict_indices = [list(feature_cols).index(f) for f in conflict_features]
+        
+        all_indices = np.arange(X_bal.shape[1])
+        features_to_keep = np.setdiff1d(all_indices, conflict_indices)
+
+        X_pruned = X_bal[:, features_to_keep]
+        print(f" Rimosse {len(conflict_indices)} feature in conflitto. Nuova dimensione: {X_pruned.shape[1]}")
+
+        sss = StratifiedShuffleSplit(n_splits=self.config.experiment.n_splits, 
+                                    test_size=self.config.experiment.test_size, 
+                                    random_state=self.config.experiment.random_seed)
+        
+        results = []
+        for fold, (train_index, test_index) in enumerate(sss.split(X_pruned, y_bal)):
+            X_train, X_test = X_pruned[train_index], X_pruned[test_index]
+            y_train, y_test = y_bal[train_index], y_bal[test_index]
+            meta_test = balanced_data.iloc[test_index]
+
+            target = self.config.experiment.target_column[0]
+            bias = self.config.experiment.bias_attribute[0]
+            model_type = self.config.experiment.model_type
+            save_dir = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/overlap_analysis"
+            os.makedirs(save_dir, exist_ok=True)
             
-            if t4_n and t7_n:
-                return self.compare_features(task4_n=t4_n, task7_n=t7_n)
+            metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, 
+                                        save_path=f"{save_dir}/fold_{fold}.joblib")
+            results.append(metrics)
+            
+        return results
+    
+
+    def run_bias_audit(self, data):
+        print("\n" + "="*50)
+        print("🕵️ AVVIO TASK 9: AUDIT ADVERSARIALE SUL BIAS")
+        print(f"Dataset: {self.config.data.current_dataset}")
+        print("="*50)
+
+        ds_name = self.config.data.current_dataset
+        if not hasattr(self.config.experiment, ds_name):
+            print(f"Parametri 'best' non trovati per {ds_name}. Salto.")
+            return None
         
-        print(f" Nessun parametro definito nel config per {ds_name}. Salto.")
-        return None
+        ds_config = getattr(self.config.experiment, ds_name)
+        conflict_features = self.compare_features(
+            task4_n=ds_config.get('best_t4'), 
+            task7_n=ds_config.get('best_t7')
+        )
+
+        bias_col = self.config.experiment.bias_attribute[0]
+        balanced_data = self.data_loader.balance_model(data)
+        X_full, _ = self.data_loader.prepare_features(balanced_data, train=True)
+        y_bias = balanced_data[bias_col].values 
+        
+        feature_cols = balanced_data.drop(columns=self.config.data.cols_to_exclude, errors='ignore').columns
+        conflict_indices = [list(feature_cols).index(f) for f in conflict_features]
+        all_indices = np.arange(X_full.shape[1])
+        features_to_keep = np.setdiff1d(all_indices, conflict_indices)
+
+        X_clean = X_full[:, features_to_keep]
+        print(f"Test di 'cecità' su {X_clean.shape[1]} feature superstiti.")
+
+        sss = StratifiedShuffleSplit(n_splits=self.config.experiment.n_splits, 
+                                    test_size=self.config.experiment.test_size, 
+                                    random_state=self.config.experiment.random_seed)
+        
+        audit_accuracies = []
+        for train_index, test_index in sss.split(X_clean, y_bias):
+            X_train, X_test = X_clean[train_index], X_clean[test_index]
+            y_train, y_test = y_bias[train_index], y_bias[test_index]
+
+            classifier = self._get_classifier()
+            classifier.train(X_train, y_train) 
+            
+            preds = classifier.predict(X_test)
+            audit_accuracies.append(accuracy_score(y_test, preds))
+            
+        avg_acc = np.mean(audit_accuracies)
+        print(f"\nRISULTATO TASK 9 ({ds_name}):")
+        print(f"(Accuracy) nel predire il sesso: {avg_acc*100:.2f}%")
+        
+        return avg_acc

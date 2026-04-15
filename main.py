@@ -121,8 +121,26 @@ if __name__ == "__main__":
                                 MetricManager.save_to_csv(ds_name, target_col, bias_attr, task_label, model_type, results_eff, csv_path)
 
 
-                    if config.experiment.runOverlapAnalysis:
-                        exp.run_final_overlap_analysis()
+                    if config.experiment.task8:
+                        results_task8 = exp.run_overlap_analysis(full_data)
+                        
+                        if results_task8:
+                            task_label = "TASK 8 (Mitigazione Conflitti)"
+                            MetricManager.print_summary(task_label, results_task8)
+                            
+                            if save_csv:
+                                MetricManager.save_to_csv(ds_name, target_col, bias_attr, task_label, 
+                                                        model_type, results_task8, csv_path)  
+
+                    if config.experiment.task9:
+                        sex_audit_acc = exp.run_bias_audit(full_data)
+
+                        if config.experiment.save_results_csv:
+                            MetricManager.save_bias_audit_to_csv(
+                                ds_name=ds_name,
+                                model_type=model_type,
+                                audit_acc=sex_audit_acc
+                            )
 
                     print("=====================================================\n")
 
