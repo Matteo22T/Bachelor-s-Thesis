@@ -133,13 +133,13 @@ if __name__ == "__main__":
                                                         model_type, results_task8, csv_path)  
 
                     if config.experiment.task9:
-                        sex_audit_acc = exp.run_bias_audit(full_data)
+                        audit_results = exp.run_bias_audit(full_data)
 
                         if config.experiment.save_results_csv:
                             MetricManager.save_bias_audit_to_csv(
                                 ds_name=ds_name,
                                 model_type=model_type,
-                                audit_acc=sex_audit_acc
+                                audit_results=audit_results
                             )
 
                     print("=====================================================\n")
@@ -165,5 +165,3 @@ if __name__ == "__main__":
                         model_type=config.experiment.model_type,
                         task5_results=task5_results
                     )
-
-    

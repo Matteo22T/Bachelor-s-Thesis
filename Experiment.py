@@ -11,7 +11,7 @@ from MetricManager import MetricManager
 from ShapExplainer import ShapFactory
 from Classifier import LogisticRegressionClassifier, RandomForestClassifierModel
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 class Experiment:
     def __init__(self, config):
@@ -216,7 +216,7 @@ class Experiment:
         return 
     
 
-    #Task 4
+    #Task 4 Analisi SHAP e Rimozione Feature Proxy: Utilizza SHAP per identificare le feature più correlate al sesso e rimuovile iterativamente, valutando l'impatto sulle performance e sul bias.
     def run_shap_analysis(self,data):
         print("--- Avvio Analisi SHAP e Rimozione Feature (Task 4) ---")
 
@@ -330,7 +330,7 @@ class Experiment:
             
         return all_ablation_results
     
-    #Task 5
+    #Task 5 
     def run_task_etnia(self, combined_data, fm_name):
         print(f"Avvio Task 5 (Domain Shift) per {fm_name}...")
 
@@ -348,8 +348,8 @@ class Experiment:
                                      test_size=self.config.experiment.test_size,
                                      random_state=self.config.experiment.random_seed)
         
-        accuracies = []
-
+        accuracies, f1_scores, aucs = [], [], []
+        
         base_dir = f"checkpoints/{self.config.experiment.model_type}/Domain_Shift_{fm_name}/task5"
         os.makedirs(base_dir, exist_ok=True)
         
@@ -367,18 +367,17 @@ class Experiment:
             classifier.train(X_train_scaled, y_train, model_save_path=checkpoint_path)
 
             preds = classifier.predict(X_test_scaled)
+            proba = classifier.predict_proba(X_test_scaled)[:, 1]
             accuracies.append(accuracy_score(y_test, preds))
+            f1_scores.append(f1_score(y_test, preds))
+            aucs.append(roc_auc_score(y_test, proba))
         
-        median_acc = np.median(accuracies)
-        q25 = np.percentile(accuracies, 25)
-        q75 = np.percentile(accuracies, 75)
-
         return {
-            'median': median_acc,
-            'q25': q25,
-            'q75': q75
-        }    
-
+            'Accuracy': {'Med': np.median(accuracies), 'Q1': np.percentile(accuracies, 25), 'Q3': np.percentile(accuracies, 75)},
+            'F1_Score': {'Med': np.median(f1_scores), 'Q1': np.percentile(f1_scores, 25), 'Q3': np.percentile(f1_scores, 75)},
+            'AUC': {'Med': np.median(aucs), 'Q1': np.percentile(aucs, 25), 'Q3': np.percentile(aucs, 75)}
+        }
+    
     #Task 6 
     def run_correlation_analysis(self, data, fm_name, ds_name):
         print("Avvio Task 6: Analisi Correlazione tra Feature e Attributo di Bias...")
@@ -614,7 +613,7 @@ class Experiment:
 
     def run_bias_audit(self, data):
         print("\n" + "="*50)
-        print("🕵️ AVVIO TASK 9: AUDIT ADVERSARIALE SUL BIAS")
+        print("AVVIO TASK 9: AUDIT SUL BIAS")
         print(f"Dataset: {self.config.data.current_dataset}")
         print("="*50)
 
@@ -642,23 +641,47 @@ class Experiment:
         X_clean = X_full[:, features_to_keep]
         print(f"Test di 'cecità' su {X_clean.shape[1]} feature superstiti.")
 
+        model_type = self.config.experiment.model_type
+        target_col = self.config.experiment.target_column[0]
+        save_dir = f"checkpoints/{model_type}/{ds_name}/{target_col}_{bias_col}/task9_audit"
+        os.makedirs(save_dir, exist_ok=True)
+
         sss = StratifiedShuffleSplit(n_splits=self.config.experiment.n_splits, 
                                     test_size=self.config.experiment.test_size, 
                                     random_state=self.config.experiment.random_seed)
         
-        audit_accuracies = []
-        for train_index, test_index in sss.split(X_clean, y_bias):
+        accuracies, f1_scores, aucs = [], [], []
+
+        for fold, (train_index, test_index) in enumerate(sss.split(X_clean, y_bias)):
             X_train, X_test = X_clean[train_index], X_clean[test_index]
             y_train, y_test = y_bias[train_index], y_bias[test_index]
 
+            checkpoint_path = f"{save_dir}/fold_{fold}.joblib"
+
             classifier = self._get_classifier()
-            classifier.train(X_train, y_train) 
+            classifier.train(X_train, y_train, model_save_path=checkpoint_path) 
             
             preds = classifier.predict(X_test)
-            audit_accuracies.append(accuracy_score(y_test, preds))
+            proba = classifier.predict_proba(X_test)[:, 1]
+
+            accuracies.append(accuracy_score(y_test, preds))
+            f1_scores.append(f1_score(y_test, preds))
+            aucs.append(roc_auc_score(y_test, proba))
             
-        avg_acc = np.mean(audit_accuracies)
-        print(f"\nRISULTATO TASK 9 ({ds_name}):")
-        print(f"(Accuracy) nel predire il sesso: {avg_acc*100:.2f}%")
-        
-        return avg_acc
+        return {
+            'Accuracy': {
+                'Med': np.median(accuracies), 
+                'Q1': np.percentile(accuracies, 25), 
+                'Q3': np.percentile(accuracies, 75)
+            },
+            'F1_Score': {
+                'Med': np.median(f1_scores), 
+                'Q1': np.percentile(f1_scores, 25), 
+                'Q3': np.percentile(f1_scores, 75)
+            },
+            'AUC': {
+                'Med': np.median(aucs), 
+                'Q1': np.percentile(aucs, 25), 
+                'Q3': np.percentile(aucs, 75)
+            }
+        }

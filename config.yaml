@@ -30,7 +30,7 @@ data:
 
 experiment:
 
-  model_type: "logistic_regression" # Opzioni: "random_forest", "logistic_regression"
+  model_type: "random_forest" # Opzioni: "random_forest", "logistic_regression"
   target_column: ["AF"]
   bias_attribute: ["sex"]
 

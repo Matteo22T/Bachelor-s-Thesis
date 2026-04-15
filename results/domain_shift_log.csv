@@ -1,5 +1,5 @@
-Timestamp,Foundation_Model,Model_Type,Accuracy_Med,Accuracy_Q1,Accuracy_Q3
-2026-04-14 11:00:48,ECG-FM,random_forest,89.96,89.69,90.24
-2026-04-14 11:02:03,HuBERT,random_forest,99.81,99.73,99.85
-2026-04-14 11:02:40,ECG-FM,logistic_regression,94.96,94.93,95.05
-2026-04-14 11:02:45,HuBERT,logistic_regression,99.98,99.93,99.98
+Timestamp,Foundation_Model,Model_Type,Accuracy_Med,Accuracy_Q1,Accuracy_Q3,F1_Score_Med,F1_Score_Q1,F1_Score_Q3,AUC_Med,AUC_Q1,AUC_Q3
+2026-04-15 13:24:24,ECG-FM,logistic_regression,94.96,94.93,95.05,0.9495,0.9492,0.9504,0.9902,0.9894,0.9905
+2026-04-15 13:24:31,HuBERT,logistic_regression,99.98,99.93,99.98,0.9998,0.9993,0.9998,1.0,1.0,1.0
+2026-04-15 13:25:06,ECG-FM,random_forest,89.96,89.69,90.24,0.8956,0.8936,0.8987,0.966,0.9648,0.9673
+2026-04-15 13:25:12,HuBERT,random_forest,99.81,99.73,99.85,0.9981,0.9973,0.9985,1.0,1.0,1.0

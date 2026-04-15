@@ -217,37 +217,49 @@ class MetricManager:
 
     @staticmethod
     def save_domain_shift_to_csv(fm_name, model_type, task5_results, csv_path="results/domain_shift_log.csv"):
-        if not task5_results:
-            return
+        if not task5_results: return
 
         row = {
             'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'Foundation_Model': fm_name,
             'Model_Type': model_type,
-            'Accuracy_Med': round(task5_results['median'] * 100, 2),
-            'Accuracy_Q1': round(task5_results['q25'] * 100, 2),
-            'Accuracy_Q3': round(task5_results['q75'] * 100, 2)
+            'Accuracy_Med': round(task5_results['Accuracy']['Med'] * 100, 2),
+            'Accuracy_Q1': round(task5_results['Accuracy']['Q1'] * 100, 2),
+            'Accuracy_Q3': round(task5_results['Accuracy']['Q3'] * 100, 2),
+            'F1_Score_Med': round(task5_results['F1_Score']['Med'], 4),
+            'F1_Score_Q1': round(task5_results['F1_Score']['Q1'], 4),
+            'F1_Score_Q3': round(task5_results['F1_Score']['Q3'], 4),
+            'AUC_Med': round(task5_results['AUC']['Med'], 4),
+            'AUC_Q1': round(task5_results['AUC']['Q1'], 4),
+            'AUC_Q3': round(task5_results['AUC']['Q3'], 4)
         }
         
         df_domain = pd.DataFrame([row])
-        
         os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-        
         file_exists = os.path.exists(csv_path)
         df_domain.to_csv(csv_path, mode='a', index=False, header=not file_exists)
 
 
-    def save_bias_audit_to_csv(ds_name, model_type, audit_acc, csv_path="results/bias_audit_log.csv"):
+    @staticmethod
+    def save_bias_audit_to_csv(ds_name, model_type, audit_results, csv_path="results/bias_audit_log.csv"):
+        if not audit_results: return
+
         row = {
             'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'Dataset': ds_name,
             'Model_Type': model_type,
-            'Audit_Accuracy': round(audit_acc * 100, 2)
+            'Accuracy_Med': round(audit_results['Accuracy']['Med'] * 100, 2),
+            'Accuracy_Q1': round(audit_results['Accuracy']['Q1'] * 100, 2),
+            'Accuracy_Q3': round(audit_results['Accuracy']['Q3'] * 100, 2),
+            'F1_Score_Med': round(audit_results['F1_Score']['Med'], 4),
+            'F1_Score_Q1': round(audit_results['F1_Score']['Q1'], 4),
+            'F1_Score_Q3': round(audit_results['F1_Score']['Q3'], 4),
+            'AUC_Med': round(audit_results['AUC']['Med'], 4),
+            'AUC_Q1': round(audit_results['AUC']['Q1'], 4),
+            'AUC_Q3': round(audit_results['AUC']['Q3'], 4)
         }
         
         df_audit = pd.DataFrame([row])
-        
         os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-        
         file_exists = os.path.exists(csv_path)
         df_audit.to_csv(csv_path, mode='a', index=False, header=not file_exists)
