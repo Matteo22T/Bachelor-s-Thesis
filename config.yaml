@@ -43,13 +43,13 @@ experiment:
 
   task1: false
   task2: false
-  task3: true
+  task3: false
   task4: false
   task5: false
   task6: false
   task7: false
   task8: false
-  task9: false
+  task9: true
 
   random_seed: 42
   n_splits: 10

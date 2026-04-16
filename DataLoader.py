@@ -54,7 +54,6 @@ class DataLoader:
         X = data.drop(columns=(self.config.data.cols_to_exclude), errors='ignore')
 
         
-
         if train:
             X_scaled = self.scaler.fit_transform(X)
         else:

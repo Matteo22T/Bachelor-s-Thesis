@@ -543,10 +543,9 @@ class Experiment:
             print(f" Feature totali embedding: {len(all_features)}")
             print(f" Feature rimosse embedding: {len(feat_t7_removed)}")
             print(f" Feature Proxy (Sesso): {len(feat_t4_proxies)}")
-            print(f" Feature Core Clinico (AF): {len(feat_t7_kept)}")
+            print(f" Feature Core Clinico (AF): {len(feat_t7_kept)-len(feat_t4_proxies)+len(intersection)}")
             print(f" --------------------------------------")
             print(f" FEATURE IN CONFLITTO: {len(intersection)}")
-            print(f" Impatto: {len(intersection)/len(feat_t4_proxies)*100:.2f}% delle proxy sono essenziali.")
             
             return intersection
 
@@ -585,19 +584,30 @@ class Experiment:
         if not conflict_features:
             print("Nessuna feature in conflitto trovata. Inutile procedere con l'ablazione.")
             return None
+        
+        target = self.config.experiment.target_column[0]
+        bias = self.config.experiment.bias_attribute[0]
+
+        path_t4 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/shap_ablation/features_to_remove_{best_n_t4}.csv"
+        path_t7 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/efficiency_ablation/removed_features_{best_n_t7}.csv"
+        
+        feat_t4_proxies = set(pd.read_csv(path_t4)['feature_to_remove'].tolist())
+        feat_t7_removed = set(pd.read_csv(path_t7)['removed_feature'].tolist())
+        
+        all_bad_features = feat_t4_proxies.union(feat_t7_removed)
 
         balanced_data = self.data_loader.balance_model(data)
         X_bal, y_bal = self.data_loader.prepare_features(balanced_data, train=True)
         
         # Mappo i nomi delle colonne per trovare gli indici da rimuovere
         feature_cols = balanced_data.drop(columns=self.config.data.cols_to_exclude, errors='ignore').columns
-        conflict_indices = [list(feature_cols).index(f) for f in conflict_features]
+        bad_indices = [list(feature_cols).index(f) for f in all_bad_features if f in feature_cols]
         
         all_indices = np.arange(X_bal.shape[1])
-        features_to_keep = np.setdiff1d(all_indices, conflict_indices)
+        features_to_keep = np.setdiff1d(all_indices, bad_indices)
 
         X_pruned = X_bal[:, features_to_keep]
-        print(f" Rimosse {len(conflict_indices)} feature in conflitto. Nuova dimensione: {X_pruned.shape[1]}")
+        print(f" Rimosse {len(bad_indices)} feature in conflitto. Nuova dimensione: {X_pruned.shape[1]}")
 
         sss = StratifiedShuffleSplit(n_splits=self.config.experiment.n_splits, 
                                     test_size=self.config.experiment.test_size, 
@@ -650,17 +660,25 @@ class Experiment:
             task7_n=best_n_t7
         )
 
-        
-
+        target = self.config.experiment.target_column[0]
         bias_col = self.config.experiment.bias_attribute[0]
+
+        path_t4 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias_col}/shap_ablation/features_to_remove_{best_n_t4}.csv"
+        path_t7 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias_col}/efficiency_ablation/removed_features_{best_n_t7}.csv"
+        
+        feat_t4_proxies = set(pd.read_csv(path_t4)['feature_to_remove'].tolist())
+        feat_t7_removed = set(pd.read_csv(path_t7)['removed_feature'].tolist())
+        
+        all_bad_features = feat_t4_proxies.union(feat_t7_removed)
+
         balanced_data = self.data_loader.balance_model(data)
         X_full, _ = self.data_loader.prepare_features(balanced_data, train=True)
         y_bias = balanced_data[bias_col].values 
         
         feature_cols = balanced_data.drop(columns=self.config.data.cols_to_exclude, errors='ignore').columns
-        conflict_indices = [list(feature_cols).index(f) for f in conflict_features]
+        bad_indices = [list(feature_cols).index(f) for f in all_bad_features if f in feature_cols]
         all_indices = np.arange(X_full.shape[1])
-        features_to_keep = np.setdiff1d(all_indices, conflict_indices)
+        features_to_keep = np.setdiff1d(all_indices, bad_indices)
 
         X_clean = X_full[:, features_to_keep]
         #print(f" su {X_clean.shape[1]} feature superstiti.")
@@ -709,3 +727,4 @@ class Experiment:
                 'Q3': np.percentile(aucs, 75)
             }
         }
+    
