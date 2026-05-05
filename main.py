@@ -4,6 +4,8 @@ from Experiment import Experiment
 from MetricManager import MetricManager
 import numpy as np
 import copy
+import pandas as pd
+import os
 
 import warnings
 from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
@@ -91,8 +93,6 @@ if __name__ == "__main__":
                         if save_csv:
                             MetricManager.save_to_csv(ds_name, target_col, bias_attr, "CASO ESTREMO (Task 2)", model_type, results_extreme, csv_path)
 
-                    if exp.config.experiment.task3:
-                        exp.run_counterfactual_case(full_data)
 
                     if exp.config.experiment.task4:
                         results_shap_dict = exp.run_shap_analysis(full_data)
@@ -115,7 +115,10 @@ if __name__ == "__main__":
                         results_eff_dict = exp.run_shap_efficiency_analysis(full_data)
                         
                         for n_rem, results_eff in results_eff_dict.items():
-                            task_label = f"TASK 7 (Efficienza: -{n_rem} feature)"
+                            if config.experiment.random_baseline:
+                                task_label = f"TASK 7 (Efficienza: -{n_rem} feature, Random Baseline)"
+                            else:
+                                task_label = f"TASK 7 (Efficienza: -{n_rem} feature)"
                             MetricManager.print_summary(task_label, results_eff)
                             if save_csv:
                                 MetricManager.save_to_csv(ds_name, target_col, bias_attr, task_label, model_type, results_eff, csv_path)
@@ -141,6 +144,41 @@ if __name__ == "__main__":
                                 model_type=model_type,
                                 audit_results=audit_results
                             )
+
+                    if config.experiment.debiasing:
+                        results_task10 = exp.run_debiasing_post_task7(full_data)
+                        
+                        if results_task10:
+                            task10_plot_data = []
+                            for n_rem, res_dict in results_task10.items():
+                                if config.experiment.random_baseline:
+                                    task_label = f"Debiasing (Pareto: -{n_rem} proxy, Random Baseline)"
+                                else:
+                                    task_label = f"Debiasing (Pareto: -{n_rem} proxy)"
+                                af_res = res_dict['af_results']
+                                audit_acc_med = res_dict['audit_acc']
+                                
+                        
+                                if save_csv:
+                                    MetricManager.save_to_csv(ds_name, target_col, bias_attr, task_label, model_type, af_res, csv_path)
+                                
+                                f1_m = np.median([r['performance']['group_a']['f1'] for r in af_res])
+                                f1_f = np.median([r['performance']['group_b']['f1'] for r in af_res])
+                                
+                                task10_plot_data.append({
+                                    'N_Removed': n_rem,
+                                    'F1_Male_Med': f1_m,
+                                    'F1_Female_Med': f1_f,
+                                    'F1_Sesso_Macro': audit_acc_med
+                                })
+                            
+                            df_plot = pd.DataFrame(task10_plot_data)
+                            if config.experiment.random_baseline:
+                                out_plot_csv = f"results/debias_post_task7/{model_type}/{ds_name}_random.csv"
+                            else:
+                                out_plot_csv = f"results/debias_post_task7/{model_type}/{ds_name}.csv"                         
+                            os.makedirs(os.path.dirname(out_plot_csv), exist_ok=True)
+                            df_plot.to_csv(out_plot_csv, index=False)
 
                     print("=====================================================\n")
 

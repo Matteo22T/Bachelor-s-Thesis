@@ -30,7 +30,7 @@ class DataLoader:
         return pd.concat(combined_data, ignore_index=True)
 
     
-    def balance_model(self, data):
+    def balance_model(self, data, max_samples=None):
         strategy = getattr(self.config.experiment, 'balancing_strategy', None)
         target_col = self.config.experiment.target_column[0]
         bias_col = self.config.experiment.bias_attribute[0]
@@ -43,6 +43,9 @@ class DataLoader:
         if strategy in ["bias", "both"]: group_cols.append(bias_col)
 
         min_size = data.groupby(group_cols).size().min()
+
+        if max_samples is not None:
+            min_size = min(min_size, max_samples)
 
         balanced_data = data.groupby(group_cols, group_keys=False).apply(lambda x: x.sample(min_size, random_state=self.config.experiment.random_seed))
         return balanced_data.reset_index(drop=True)

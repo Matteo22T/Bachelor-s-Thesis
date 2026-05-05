@@ -27,6 +27,7 @@ class Classifier(ABC):
         force_retrain = getattr(self.config.experiment, 'force_retrain', False)
 
         if model_save_path and os.path.exists(model_save_path) and not force_retrain:
+            print(f"   [CACHE] Modello caricato dal checkpoint: {os.path.basename(model_save_path)}")
             self.model = joblib.load(model_save_path)
             return
 

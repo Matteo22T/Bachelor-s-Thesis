@@ -6,6 +6,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from ConfigLoader import ConfigLoader
 from DataLoader import DataLoader
+from datetime import datetime
 import os
 
 def generate_perfect_plots(csv_path="results/experiments_log.csv"):
@@ -20,7 +21,6 @@ def generate_perfect_plots(csv_path="results/experiments_log.csv"):
         nums = re.findall(r'\d+', str(task_text))
         return int(nums[-1]) if len(nums) >= 2 else None
 
-    # Filtro Task
     df_t4 = df[df['Task'].str.contains("TASK 4", na=False)].copy()
     df_t7 = df[df['Task'].str.contains("TASK 7", na=False)].copy()
 
@@ -48,11 +48,11 @@ def generate_perfect_plots(csv_path="results/experiments_log.csv"):
             
             # Plot Maschi
             plt.plot(group['N_Removed'], group['F1_Male_Med'], 
-                     marker='o', markersize=8, linewidth=2.5, label="Maschi (F1)", color='#1f77b4')
+                     marker='o', markersize=8, linewidth=2.5, label="Male (F1)", color='#1f77b4')
             
             # Plot Femmine
             plt.plot(group['N_Removed'], group['F1_Female_Med'], 
-                     marker='s', markersize=8, linestyle='--', linewidth=2.5, label="Femmine (F1)", color='#d62728')
+                     marker='s', markersize=8, linestyle='--', linewidth=2.5, label="Female (F1)", color='#d62728')
 
             plt.xticks(exact_ticks, rotation=45)
             # Forzo il grafico a iniziare dal primo punto e finire all'ultimo
@@ -74,21 +74,73 @@ def generate_perfect_plots(csv_path="results/experiments_log.csv"):
             plt.close()
             print(f"Grafico corretto salvato: {save_path} (Punti X: {exact_ticks})")
 
-def generate_pca_plots():
+def generate_debias_post_task7_plots():
+    sns.set_context("notebook", font_scale=1.1)
+    sns.set_style("whitegrid")
 
+    base_dir = "results/debias_post_task7"  
+    if not os.path.exists(base_dir):
+        print("Nessun dato trovato per la Task debiasing post-Task 7.")
+        return
+
+    for model in os.listdir(base_dir):
+        model_dir = os.path.join(base_dir, model)
+        if not os.path.isdir(model_dir): continue
+
+        for file in os.listdir(model_dir):
+            if not file.endswith(".csv"): continue
+            
+            ds_name = file.replace(".csv", "")
+            df = pd.read_csv(os.path.join(model_dir, file))
+
+            plt.figure(figsize=(12, 7))
+
+            plt.plot(df['N_Removed'], df['F1_Male_Med'], marker='o', markersize=5, linewidth=1.5, color='#1f77b4', label='Diagnosis AF - Male (F1)')
+            
+            plt.plot(df['N_Removed'], df['F1_Female_Med'], marker='s', markersize=5, linestyle='--', linewidth=1.5, color='#d62728', label='Diagnosis AF - Female (F1)')
+            
+            plt.plot(df['N_Removed'], df['F1_Sesso_Macro'], marker='^', markersize=5, linestyle=':', linewidth=2, color='#2ca02c', label='Diagnosis Sex (F1 Macro)')
+            plt.axhline(y=0.5, color='grey', linestyle='--', alpha=0.8, label='Modello cieco (Random Guess 50%)')
+
+            plt.title(f"De-biasing Analysis: Diagnosis Performance vs Recognition of Sex, Post-Task 7\nDataset: {ds_name} | Modello: {model}", fontsize=14, fontweight='bold')
+            plt.xlabel("Number of Proxy Features Removed (Non-linear Scale: 0, 2, 4, 8...)", fontsize=12)
+            plt.ylabel("F1-Score (Median)", fontsize=12)
+
+            exact_ticks = df['N_Removed'].values
+            plt.xticks(exact_ticks, rotation=0)
+            plt.ylim(0.4, 1.05) 
+
+            plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+            plt.tight_layout()
+
+            out_plot = os.path.join("results/grafici_debias_post_task7", model)
+            os.makedirs(out_plot, exist_ok=True)
+            save_path = os.path.join(out_plot, f"{ds_name}.png")
+            plt.savefig(save_path, dpi=300)
+            plt.close()
+
+def generate_pca_plots():
     config = ConfigLoader("config.yaml")
     data_loader = DataLoader(config)
 
-    target_dir = os.path.join("results", "pca_plots","embeddings_non_filtrati")
-    os.makedirs(target_dir, exist_ok=True)
+    model_type = config.experiment.model_type
+    
+    base_target_dir = os.path.join("results", "pca_plots", "embeddings_filtrati")
+    img_target_dir = os.path.join(base_target_dir, model_type)
+    os.makedirs(img_target_dir, exist_ok=True)
+    
+    master_csv_path = os.path.join(base_target_dir, "pca_variance_log.csv")
 
     datasets = ["georgia_ecgfm", "chapman_ecgfm", "georgia_hubert_ecg_base", "chapman_hubert_ecg_base"]
+    n_comp = getattr(config.experiment, 'pca_dimensions', 2)
 
     sns.set_context("notebook", font_scale=1.1)
     sns.set_style("ticks")
+    
+    variance_log_data = []
 
     for ds in datasets:
-        print(f"Generazione PCA per {ds}...")
+        print(f"\nGenerazione PCA ({n_comp}D) per {ds}...")
         embedding_path = None
         metadata_path = None
         
@@ -101,87 +153,137 @@ def generate_pca_plots():
             if embedding_path: break
             
         if not embedding_path:
-            print(f"Errore: Percorsi non trovati nel config per {ds}")
             continue
 
         config.data.current_dataset = ds
-        config.data.embedding_path = embedding_path  
+        config.data.embeddings_path = embedding_path  
         config.data.metadata_path = metadata_path
 
         try:
+            if not hasattr(config.experiment, ds) or model_type not in getattr(config.experiment, ds):
+                print(f" [!] Parametri best non trovati per {ds}. Salto.")
+                continue
+                
+            model_params = getattr(config.experiment, ds)[model_type]
+            best_t7 = model_params.get('best_t7')
+            best_t4_post = model_params.get('best_t4_post_t7')
+            
+            if best_t7 is None or best_t4_post is None:
+                print(f" [!] Parametri 'best_t7' o 'best_t4_post_t7' mancanti nel config per {ds}. Salto.")
+                continue
+            
+            target = config.experiment.target_column[0]
+            bias = config.experiment.bias_attribute[0]
+            
+            path_t7 = f"checkpoints/{model_type}/{ds}/{target}_{bias}/efficiency_ablation/removed_features_{best_t7}.csv"
+            path_t4_post = f"checkpoints/{model_type}/{ds}/{target}_{bias}/debias_post_task7/removed_features_step_{best_t4_post}.csv"
+            
+            feat_t7_removed = set()
+            feat_t4_post_removed = set()
+            
+            if os.path.exists(path_t7):
+                feat_t7_removed = set(pd.read_csv(path_t7)['removed_feature'].tolist())
+            else:
+                print(f" [!] Manca file Task 7: {path_t7}")
+                continue
+                
+            if best_t4_post > 0:
+                if os.path.exists(path_t4_post):
+                    feat_t4_post_removed = set(pd.read_csv(path_t4_post)['removed_feature'].tolist())
+                else:
+                    print(f" [!] Manca file Debias post T7: {path_t4_post}")
+                    continue
+            
+            all_features_to_remove = list(feat_t7_removed.union(feat_t4_post_removed))
+            print(f" -> Feature da scartare: {len(all_features_to_remove)} (T7: {len(feat_t7_removed)} | Debias: {len(feat_t4_post_removed)})")
+
             data = data_loader.load_data()
-            balanced_data = data_loader.balance_model(data)
-            X_scaled, y = data_loader.prepare_features(balanced_data)
+            balanced_data = data_loader.balance_model(data, max_samples=200)
+            
+            balanced_data_pruned = balanced_data.drop(columns=all_features_to_remove, errors='ignore')
+            
+            X_scaled, y = data_loader.prepare_features(balanced_data_pruned, train=True)
+            sex_values = balanced_data_pruned['sex'].values
+            num_feature_rimaste = X_scaled.shape[1]
 
-            sex_values = balanced_data['sex'].values
+            num_samples = X_scaled.shape[0]
+            print(f" -> Dati passati alla PCA: {num_samples} pazienti (su {len(data)} originali)")
 
-            target_col = config.experiment.target_column[0]
-
-            pca = PCA(n_components=2)
+            pca = PCA(n_components=n_comp)
             X_pca = pca.fit_transform(X_scaled)
-
-            # percentuale varianza spiegata
+            
             var_explained = pca.explained_variance_ratio_ * 100
+            total_variance = var_explained.sum()
 
-            pca_df = pd.DataFrame(X_pca, columns=['PC1', 'PC2'])
-            pca_df['Diagnosi'] = y
-            pca_df['Sesso'] = sex_values
+            variance_log_data.append({
+                'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'Dataset': ds,
+                'Model': model_type,
+                'PCA_Dimensions': n_comp,
+                'T7_Removed': best_t7,
+                'T4_Post_Removed': best_t4_post,
+                'Features_Kept': num_feature_rimaste,
+                'Samples_Used': num_samples,  # <--- NUOVA COLONNA
+                'Total_Variance_%': round(total_variance, 4)
+            })
 
-            diagnosis_mapping = {0: 'Sano', 1: 'AF'}
-            pca_df['Diagnosi'] = pca_df['Diagnosi'].map(diagnosis_mapping)
-            pca_df['Sesso'] = pca_df['Sesso'].map({0: 'Maschio', 1: 'Femmina'})
+            if n_comp == 2:
+                pca_df = pd.DataFrame(X_pca, columns=['PC1', 'PC2'])
+                pca_df['Diagnosi'] = y
+                pca_df['Sesso'] = sex_values
 
-            pca_df['Gruppo'] = pca_df['Sesso'] + " - " + pca_df['Diagnosi']
+                pca_df['Diagnosi'] = pca_df['Diagnosi'].map({0: 'Healthy', 1: 'AF'})
+                pca_df['Sesso'] = pca_df['Sesso'].map({0: 'Male', 1: 'Female'})
+                pca_df['Gruppo'] = pca_df['Sesso'] + " - " + pca_df['Diagnosi']
 
-            plt.figure(figsize=(12, 8))
+                plt.figure(figsize=(12, 8))
 
-            custom_palette = {
-                "Maschio - Sano": "#6baed6",
-                "Maschio - AF": "#08519c",   
-                "Femmina - Sano": "#fb6a4a",  
-                "Femmina - AF": "#a50f15"    
-            }
+                custom_palette = {
+                    "Male - Healthy": "#6baed6",
+                    "Male - AF": "#08519c",   
+                    "Female - Healthy": "#fb6a4a",  
+                    "Female - AF": "#a50f15"    
+                }
+                custom_markers = {
+                    "Male - Healthy": "o", "Male - AF": "o",
+                    "Female - Healthy": "s", "Female - AF": "s"
+                }
 
-            custom_markers = {
-                "Maschio - Sano": "o",
-                "Maschio - AF": "o",
-                "Femmina - Sano": "s",
-                "Femmina - AF": "s"
-            }
+                sns.scatterplot(
+                    data=pca_df, x='PC1', y='PC2',
+                    hue='Gruppo', style='Gruppo',
+                    palette=custom_palette, markers=custom_markers,
+                    s=80, alpha=0.7, linewidth=0.5
+                )
+                plt.xlabel(f"PC1 - Variance explained: {var_explained[0]:.1f}%", fontsize=16, fontweight='bold')
+                plt.ylabel(f"PC2 - Variance explained: {var_explained[1]:.1f}%", fontsize=16, fontweight='bold')
 
-            scatter = sns.scatterplot(
-                data = pca_df,
-                x = 'PC1',
-                y = 'PC2',
-                hue = 'Gruppo',
-                style='Gruppo',
-                palette=custom_palette, 
-                markers=custom_markers,
-                s = 80,
-                alpha = 0.6,
-                linewidth = 0.5,
-            )
+                plt.title(f"PCA 2D (Filtered Embedding)\nDataset: {ds} | Feature: {num_feature_rimaste} | Samples: {num_samples}", fontsize=18, fontweight='bold')
 
-            plt.xlabel(f"PC1 - Varianza: {var_explained[0]:.1f}%", fontsize=12, fontweight='bold')
-            plt.ylabel(f"PC2 - Varianza: {var_explained[1]:.1f}%", fontsize=12, fontweight='bold')
+                plt.tick_params(axis='both', which='major', labelsize=14)
 
-            plt.title(f"Proiezione PCA 2D | Dataset: {ds}\nTarget: {target_col}", fontsize=14, fontweight='bold')
-            plt.legend(title='Gruppo Pazienti', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=True)
+                plt.legend(title='Patient Group', bbox_to_anchor=(1.05, 1), loc='upper left', frameon=True)
 
-            plt.axhline(0, color='grey', linestyle='--', linewidth=1)
-            plt.axvline(0, color='grey', linestyle='--', linewidth=1)
+                plt.axhline(0, color='grey', linestyle='--', linewidth=1)
+                plt.axvline(0, color='grey', linestyle='--', linewidth=1)
 
-            sns.despine()
-            plt.tight_layout()
+                sns.despine()
+                plt.tight_layout()
 
-            save_path = os.path.join(target_dir, f"{ds}.png")
-            plt.savefig(save_path, dpi=300)
-            plt.close()
-            print(f"Salvato grafico PCA 2D: {save_path}")
-        
+                file_name = f"{ds}_t7_{best_t7}_t4post_{best_t4_post}.png"
+                save_path = os.path.join(img_target_dir, file_name)
+                plt.savefig(save_path, dpi=300)
+                plt.close()
+                print(f" -> Salvato grafico PCA 2D: {save_path}")
+
         except Exception as e:
             print(f"Errore su {ds}: {e}")
             plt.close()
+            
+    if variance_log_data:
+        df_new_log = pd.DataFrame(variance_log_data)
+        file_exists = os.path.exists(master_csv_path)
+        df_new_log.to_csv(master_csv_path, mode='a', index=False, header=not file_exists)
 
 def generate_task8_pca_plots():
     config = ConfigLoader("config.yaml")
@@ -194,7 +296,7 @@ def generate_task8_pca_plots():
 
     datasets_to_process = ["georgia_ecgfm", "chapman_ecgfm", "georgia_hubert_ecg_base", "chapman_hubert_ecg_base"]
 
-    sns.set_context("notebook", font_scale=1.1)
+    sns.set_context("notebook", font_scale=1.4)
     sns.set_style("ticks")
 
     for ds_name in datasets_to_process:
@@ -231,7 +333,6 @@ def generate_task8_pca_plots():
             target = config.experiment.target_column[0]
             bias = config.experiment.bias_attribute[0]
             
-            # 3. Leggi i file CSV generati dalle run precedenti
             path_t4 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/shap_ablation/features_to_remove_{best_t4}.csv"
             path_t7 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/efficiency_ablation/removed_features_{best_t7}.csv"
             
@@ -261,24 +362,24 @@ def generate_task8_pca_plots():
             pca_df['Diagnosi_Num'] = y
             pca_df['Sesso_Num'] = sex_values
 
-            pca_df['Diagnosi'] = pca_df['Diagnosi_Num'].map({0: 'Sano', 1: 'AF'})
-            pca_df['Sesso'] = pca_df['Sesso_Num'].map({0: 'Maschio', 1: 'Femmina'})
+            pca_df['Diagnosi'] = pca_df['Diagnosi_Num'].map({0: 'Healthy', 1: 'AF'})
+            pca_df['Sesso'] = pca_df['Sesso_Num'].map({0: 'Male', 1: 'Female'})
             pca_df['Gruppo'] = pca_df['Sesso'] + " - " + pca_df['Diagnosi']
 
             plt.figure(figsize=(12, 8))
             
             custom_palette = {
-                "Maschio - Sano": "#6baed6",               
-                "Maschio - AF": "#08519c",   
-                "Femmina - Sano": "#fb6a4a",               
-                "Femmina - AF": "#a50f15"    
+                "Male - Healthy": "#6baed6",               
+                "Male - AF": "#08519c",   
+                "Female - Healthy": "#fb6a4a",               
+                "Female - AF": "#a50f15"    
             }
             
             custom_markers = {
-                "Maschio - Sano": "o",
-                "Maschio - AF": "o",
-                "Femmina - Sano": "s",
-                "Femmina - AF": "s"
+                "Male - Healthy": "o",
+                "Male - AF": "o",
+                "Female - Healthy": "s",
+                "Female - AF": "s"
             }
 
             sns.scatterplot(
@@ -311,11 +412,14 @@ def generate_task8_pca_plots():
             plt.close()
 
 
+
 if __name__ == "__main__":
     print("Generazione grafici...")
 
     #generate_perfect_plots()
 
-    #generate_pca_plots()
+    generate_pca_plots()
 
-    generate_task8_pca_plots()
+    #generate_task8_pca_plots()
+
+    #generate_debias_post_task7_plots()

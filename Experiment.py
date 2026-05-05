@@ -153,68 +153,6 @@ class Experiment:
         return all_results
 
 
-    #Task 3 Caso Controfattuale: Misura la percentuale di campioni il cui risultato predetto cambia quando si inverte l'attributo di bias. 
-    # Obiettivo: Valutare la robustezza del modello rispetto a cambiamenti nell'attributo di bias.
-    def run_counterfactual_case(self, data):
-        print("Avvio caso controfattuale...")
-
-        original_meta_data = getattr(self.config.data, "metadata_to_concatenate", [])
-
-        # Soluzione rapida per aggiungere i metadata da concatenare poichè se lo facessi dal config.yaml
-        # influisce su gli altri esperimenti e non potrei runnarli tutti in sequenza
-        temporarily_added = original_meta_data.copy()
-        if 'sex' not in temporarily_added:
-            temporarily_added.append('sex')
-            self.config.data.metadata_to_concatenate = temporarily_added
-
-        balanced_data = self.data_loader.balance_model(data)
-
-        X, y = self.data_loader.prepare_features(balanced_data, train=True) 
-
-        sex_col_index = X.shape[1] - 1
-
-        sss = StratifiedShuffleSplit(n_splits=self.config.experiment.n_splits,
-                                     test_size=self.config.experiment.test_size,
-                                     random_state=self.config.experiment.random_seed)
-        
-        flips_count = []
-
-        for fold, (train_index, test_index) in enumerate(sss.split(X, y)):
-            X_train, X_test = X[train_index], X[test_index]
-            y_train, y_test = y[train_index], y[test_index]
-
-            classifier = self._get_classifier()
-
-            ds_name = self.config.data.current_dataset
-            target = self.config.experiment.target_column[0]
-            bias = self.config.experiment.bias_attribute[0]
-            
-            base_dir = f"checkpoints/{self.config.experiment.model_type}/{ds_name}/{target}_{bias}/counterfactual_case"
-            os.makedirs(base_dir, exist_ok=True)
-            checkpoint_path = f"{base_dir}/fold_{fold}.joblib"
-
-            classifier.train(X_train, y_train, model_save_path=checkpoint_path)
-
-            preds_original = classifier.predict(X_test)
-            X_test_cf = X_test.copy()
-
-            X_test_cf[:, sex_col_index] = 1 - X_test_cf[:, sex_col_index]
-
-            preds_cf = classifier.predict(X_test_cf)
-
-            flips = np.sum(preds_original != preds_cf)
-            flips_rate = flips / len(preds_original)
-            flips_count.append(flips_rate)
-
-            #print(f"Fold {fold+1}: Flip Rate = {flips_rate*100:.2f}% ({flips}/{len(preds_original)} cambi)")
-
-        self.config.data.metadata_to_concatenate = original_meta_data
-       
-        avg_flip_rate = np.mean(flips_count)
-        print(f"\n{'='*10} RISULTATI TASK 3 {'='*10}")
-        print(f"-> Counterfactual Flip Rate medio: {avg_flip_rate*100:.2f}%")
-        return 
-    
 
     #Task 4 Analisi SHAP e Rimozione Feature Proxy: Utilizza SHAP per identificare le feature più correlate al sesso e rimuovile iterativamente, valutando l'impatto sulle performance e sul bias.
     def run_shap_analysis(self,data):
@@ -470,6 +408,12 @@ class Experiment:
         n_to_remove_list = self.config.experiment.n_features_to_remove_shap_efficiency
         all_efficiency_results = {}
 
+        if self.config.experiment.random_baseline:
+            np.random.seed(self.config.experiment.random_seed)
+            np.random.shuffle(feature_importance['feature_idx'].values)
+            base_dir = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/efficiency_ablation/random_baseline"
+            os.makedirs(base_dir, exist_ok=True)
+
         for n_remove in n_to_remove_list:
             bottom_features = feature_importance['feature_idx'].tail(n_remove).values
             features_to_keep = np.setdiff1d(all_features_idxs, bottom_features)
@@ -502,7 +446,6 @@ class Experiment:
             
         return all_efficiency_results
     
-
 
     def compare_features(self, task4_n, task7_n):
         ds_name = self.config.data.current_dataset
@@ -728,3 +671,139 @@ class Experiment:
             }
         }
     
+
+
+    def run_debiasing_post_task7(self, data):
+        print("\n" + "="*50)
+        print("AVVIO TASK 10: DE-BIASING POST-TASK 7 (0, 2, 4, 8, 16...)")
+        print("="*50)
+
+        ds_name = self.config.data.current_dataset
+        model_type = self.config.experiment.model_type
+        target = self.config.experiment.target_column[0]
+        bias = self.config.experiment.bias_attribute[0]
+
+        base_dir = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/debias_post_task7"
+        os.makedirs(base_dir, exist_ok=True)
+
+        ds_config = getattr(self.config.experiment, ds_name, {})
+        if model_type not in ds_config:
+            print(f"Parametri best non trovati per {ds_name}. Salto.")
+            return None
+        
+        best_t7 = ds_config[model_type]['best_t7']
+        if self.config.experiment.random_baseline:
+            path_t7 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/efficiency_ablation/random_baseline/removed_features_{best_t7}.csv"
+        else:        
+            path_t7 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/efficiency_ablation/removed_features_{best_t7}.csv"
+        if not os.path.exists(path_t7):
+            print(f"Manca il file CSV della Task 7 per {ds_name}.")
+            return None
+            
+        feat_t7_removed = set(pd.read_csv(path_t7)['removed_feature'].tolist())
+
+        balanced_data = self.data_loader.balance_model(data)
+        X_full, _ = self.data_loader.prepare_features(balanced_data, train=True)
+        feature_cols = balanced_data.drop(columns=self.config.data.cols_to_exclude, errors='ignore').columns
+
+        t7_indices = [list(feature_cols).index(f) for f in feat_t7_removed if f in feature_cols]
+        all_indices = np.arange(X_full.shape[1])
+        features_to_keep_t7 = np.setdiff1d(all_indices, t7_indices)
+
+        # Dataset base post-Task 7
+        X_clinical = X_full[:, features_to_keep_t7]
+        clinical_feature_names = feature_cols[features_to_keep_t7]
+        y_af = balanced_data[target].values
+        y_sex = balanced_data[bias].values
+
+        num_clinical_features = X_clinical.shape[1]
+        print(f" -> Feature cliniche superstiti (Post-T7): {num_clinical_features}")
+
+        # SHAP per il sesso
+        shap_cache_path = f"{base_dir}/shap_feature_importance.csv"
+        force_retrain = getattr(self.config.experiment, 'force_retrain', False)
+
+        if os.path.exists(shap_cache_path) and not force_retrain:
+            print(f"   [INFO] Caricamento classifica feature dalla cache: {shap_cache_path}")
+            feature_importance = pd.read_csv(shap_cache_path)
+        else:
+            classifier_shap = self._get_classifier()
+            shap_model_path = f"{base_dir}/shap_detector_model.joblib"
+            classifier_shap.train(X_clinical, y_sex, model_save_path=shap_model_path) 
+
+            shap_strategy = ShapFactory.get_explainer(model_type)
+            sample_size = self.config.experiment.sample_size_shap
+            X_sample = X_clinical[:sample_size] if sample_size < len(X_clinical) else X_clinical
+
+            shap_values = shap_strategy.get_shap_values(classifier_shap.model, X_sample)
+            if isinstance(shap_values, list): shap_values = shap_values[1]
+            elif len(np.shape(shap_values)) == 3: shap_values = shap_values[:, :, 1]
+
+            vals = np.abs(shap_values).mean(0)
+            feature_importance = pd.DataFrame({
+                'local_idx': range(len(vals)), 
+                'feature_name': clinical_feature_names,
+                'importance': vals
+            })
+            feature_importance.sort_values(by='importance', ascending=False, inplace=True)
+            feature_importance.to_csv(shap_cache_path, index=False)
+
+        # 3. Sequenza esponenziale
+        removal_steps = [0]
+        k = 2
+        while k < num_clinical_features:
+            removal_steps.append(k)
+            k *= 2
+
+        sss = StratifiedShuffleSplit(n_splits=self.config.experiment.n_splits, test_size=self.config.experiment.test_size, random_state=self.config.experiment.random_seed)
+
+        all_step_results = {}
+
+        if self.config.experiment.random_baseline:
+            np.random.seed(self.config.experiment.random_seed)
+            np.random.shuffle(feature_importance['local_idx'].values)
+            base_dir = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/debias_post_task7/random_baseline"
+            os.makedirs(base_dir, exist_ok=True)
+
+        for n_remove in removal_steps:
+            print(f"   >> Test con {n_remove} feature proxy rimosse...")
+            top_proxy_local_idxs = feature_importance['local_idx'].head(n_remove).values
+
+            if n_remove > 0:
+                removed_feature_names = feature_importance['feature_name'].head(n_remove).values
+                df_removed = pd.DataFrame({'removed_feature': removed_feature_names})
+                removed_csv_path = f"{base_dir}/removed_features_step_{n_remove}.csv"
+                df_removed.to_csv(removed_csv_path, index=False)
+
+            clinical_indices = np.arange(num_clinical_features)
+            features_to_keep_now = np.setdiff1d(clinical_indices, top_proxy_local_idxs)
+
+            X_step = X_clinical[:, features_to_keep_now]
+
+            af_metrics_list = []
+            audit_acc_list = []
+
+            for fold, (train_idx, test_idx) in enumerate(sss.split(X_step, y_af)):
+                X_train, X_test = X_step[train_idx], X_step[test_idx]
+                y_train_af, y_test_af = y_af[train_idx], y_af[test_idx]
+                y_train_sex, y_test_sex = y_sex[train_idx], y_sex[test_idx]
+                meta_test = balanced_data.iloc[test_idx]
+
+                checkpoint_af = f"{base_dir}/fold_{fold}_{n_remove}_AF.joblib"
+                
+                metrics = self.run_fold_logic(X_train, y_train_af, X_test, y_test_af, meta_test, save_path=checkpoint_af)
+                af_metrics_list.append(metrics)
+
+                checkpoint_sex = f"{base_dir}/fold_{fold}_{n_remove}_SEX.joblib"
+
+                clf_sex = self._get_classifier()
+                clf_sex.train(X_train, y_train_sex, model_save_path=checkpoint_sex)
+                preds_sex = clf_sex.predict(X_test)
+                audit_acc_list.append(f1_score(y_test_sex, preds_sex, average='macro'))
+
+            all_step_results[n_remove] = {
+                'af_results': af_metrics_list,  
+                'audit_acc': np.median(audit_acc_list)
+            }
+
+        return all_step_results
