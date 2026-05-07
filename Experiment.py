@@ -672,7 +672,6 @@ class Experiment:
         }
     
 
-
     def run_debiasing_post_task7(self, data):
         print("\n" + "="*50)
         print("AVVIO TASK 10: DE-BIASING POST-TASK 7 (0, 2, 4, 8, 16...)")
@@ -807,3 +806,184 @@ class Experiment:
             }
 
         return all_step_results
+    
+    def analyze_feature_overlap_from_csv(self, ds_name_1, ds_name_2):
+        print(f"\n{'='*70}")
+        print(f"PARTE 3: ANALISI SOVRAPPOSIZIONE FEATURE ({ds_name_1} vs {ds_name_2})")
+        print(f"{'='*70}")
+
+        model_type = self.config.experiment.model_type
+        target = self.config.experiment.target_column[0]
+        bias = self.config.experiment.bias_attribute[0]
+
+        def get_surviving_features(ds_name):
+            ds_config = getattr(self.config.experiment, ds_name, {})
+            model_config = ds_config.get(model_type, {})
+            best_t7 = model_config.get('best_t7', 0)
+            best_t4 = model_config.get('best_t4_post_t7', 0)
+
+            all_features = set([f"feature_{i}" for i in range(768)]) 
+
+            path_t7 = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/efficiency_ablation/removed_features_{best_t7}.csv"
+            removed_t7 = set()
+            try:
+                removed_t7 = set(pd.read_csv(path_t7)['removed_feature'].astype(str).tolist())
+            except FileNotFoundError:
+                print(f"   [ATTENZIONE] CSV Task 7 non trovato per {ds_name}: {path_t7}")
+
+            path_debias = f"checkpoints/{model_type}/{ds_name}/{target}_{bias}/debias_post_task7/removed_features_step_{best_t4}.csv"
+            removed_t8 = set()
+            try:
+                removed_t8 = set(pd.read_csv(path_debias)['removed_feature'].astype(str).tolist())
+            except FileNotFoundError:
+                print(f"   [ATTENZIONE] CSV Debiasing non trovato per {ds_name}: {path_debias}")
+
+            surviving = all_features - removed_t7 - removed_t8
+            return list(surviving)
+
+        surviving_1 = get_surviving_features(ds_name_1)
+        surviving_2 = get_surviving_features(ds_name_2)
+
+        intersezione = np.intersect1d(surviving_1, surviving_2)
+        unione = np.union1d(surviving_1, surviving_2)
+
+        print(f"\n   [RISULTATI SOVRAPPOSIZIONE {model_type.upper()}]")
+        print(f"   - Feature rimaste filtrate solo su {ds_name_1}: {len(surviving_1)}")
+        print(f"   - Feature rimaste filtrate solo su {ds_name_2}: {len(surviving_2)}")
+        print(f"   - Feature IN COMUNE (Intersezione): {len(intersezione)}")
+        print(f"   - Feature TOTALI combinate (Unione):  {len(unione)}")
+
+        out_dir = f"results/cross_dataset/{model_type}"
+        os.makedirs(out_dir, exist_ok=True)
+        
+        pd.DataFrame({'Common_Features_Intersection': intersezione}).to_csv(f"{out_dir}/{ds_name_1}_vs_{ds_name_2}_intersection.csv", index=False)
+        pd.DataFrame({'All_Features_Union': unione}).to_csv(f"{out_dir}/{ds_name_1}_vs_{ds_name_2}_union.csv", index=False)
+        
+        print(f"   -> Liste salvate con successo in: {out_dir}/")
+        
+        return intersezione, unione
+    
+
+    def run_cross_dataset_base(self, data_train, data_test, train_name, test_name):
+        print(f"\n   -> [CROSS-DATASET] PARTE 1: BASE (Full Embedding)")
+        print(f"      Train: [{train_name}] | Test: [{test_name}]")
+
+        balanced_train = self.data_loader.balance_model(data_train)
+        balanced_test = self.data_loader.balance_model(data_test)
+
+        X_train, y_train = self.data_loader.prepare_features(balanced_train, train=True)
+        X_test, y_test = self.data_loader.prepare_features(balanced_test, train=False)
+        
+        meta_test = balanced_test 
+
+        print(f"      [INFO] Campioni Train: {X_train.shape[0]} | Campioni Test: {X_test.shape[0]}")
+        print(f"      [INFO] Feature utilizzate: {X_train.shape[1]}")
+
+        model_type = self.config.experiment.model_type
+        save_dir = f"checkpoints/{model_type}/cross_dataset/parte1_base/{train_name}_to_{test_name}"
+        os.makedirs(save_dir, exist_ok=True)
+        model_path = f"{save_dir}/model.joblib"
+
+        metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=model_path)
+
+        metrics['Task'] = "CrossDataset (Parte 1: Base Full)"
+        metrics['Dataset'] = f"Train:{train_name} -> Test:{test_name}"
+        metrics['Model'] = model_type
+
+        return [metrics]
+    
+
+
+    def run_cross_dataset_filtered(self, data_train, data_test, train_name, test_name):
+        print(f"\n   -> [CROSS-DATASET] PARTE 2: FILTRATO (Maschera del Train)")
+        print(f"      Train: [{train_name}] | Test: [{test_name}]")
+
+        balanced_train = self.data_loader.balance_model(data_train)
+        balanced_test = self.data_loader.balance_model(data_test)
+
+        feature_cols = balanced_train.drop(columns=self.config.data.cols_to_exclude, errors='ignore').columns
+
+        X_train, y_train = self.data_loader.prepare_features(balanced_train, train=True)
+        X_test, y_test = self.data_loader.prepare_features(balanced_test, train=False)
+        meta_test = balanced_test 
+
+        model_type = self.config.experiment.model_type
+        target = self.config.experiment.target_column[0]
+        bias = self.config.experiment.bias_attribute[0]
+
+        ds_config = getattr(self.config.experiment, train_name, {})
+        model_config = ds_config.get(model_type, {})
+        best_t7 = model_config.get('best_t7', 0)
+        best_t4 = model_config.get('best_t4_post_t7', 0)
+
+        all_features = set(feature_cols)
+
+        path_t7 = f"checkpoints/{model_type}/{train_name}/{target}_{bias}/efficiency_ablation/removed_features_{best_t7}.csv"
+        removed_t7 = set()
+        try:
+            removed_t7 = set(pd.read_csv(path_t7)['removed_feature'].astype(str).tolist())
+        except FileNotFoundError:
+            print(f"   [ATTENZIONE] CSV Task 7 non trovato per {train_name}: {path_t7}")
+
+        path_debias = f"checkpoints/{model_type}/{train_name}/{target}_{bias}/debias_post_task7/removed_features_step_{best_t4}.csv"
+        removed_t8 = set()
+        try:
+            removed_t8 = set(pd.read_csv(path_debias)['removed_feature'].astype(str).tolist())
+        except FileNotFoundError:
+            print(f"   [ATTENZIONE] CSV Debiasing non trovato per {train_name}: {path_debias}")
+
+        surviving = all_features - removed_t7 - removed_t8
+
+        indices_to_keep = sorted([list(feature_cols).index(f) for f in surviving if f in feature_cols])
+        
+        X_train = X_train[:, indices_to_keep]
+        X_test = X_test[:, indices_to_keep]
+
+        print(f"      [INFO] Feature utilizzate (Sopravvissute su {train_name}): {X_train.shape[1]}")
+
+        save_dir = f"checkpoints/{model_type}/cross_dataset/parte2_filtered/{train_name}_to_{test_name}"
+        os.makedirs(save_dir, exist_ok=True)
+        model_path = f"{save_dir}/model.joblib"
+
+        metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=model_path)
+
+        metrics['Task'] = "CrossDataset (Parte 2: Filtrato)"
+        metrics['Dataset'] = f"Train:{train_name} -> Test:{test_name}"
+        metrics['Model'] = model_type
+
+        return [metrics]
+    
+
+
+    def run_cross_dataset_union(self, data_train, data_test, train_name, test_name, union_features):
+        print(f"\n   -> [CROSS-DATASET] PARTE 3: UNIONE (Feature Universali)")
+        print(f"      Train: [{train_name}] | Test: [{test_name}]")
+
+        balanced_train = self.data_loader.balance_model(data_train)
+        balanced_test = self.data_loader.balance_model(data_test)
+
+        feature_cols = balanced_train.drop(columns=self.config.data.cols_to_exclude, errors='ignore').columns
+
+        X_train, y_train = self.data_loader.prepare_features(balanced_train, train=True)
+        X_test, y_test = self.data_loader.prepare_features(balanced_test, train=False)
+        meta_test = balanced_test 
+
+        indices_to_keep = sorted([list(feature_cols).index(f) for f in union_features if f in feature_cols])
+        
+        X_train = X_train[:, indices_to_keep]
+        X_test = X_test[:, indices_to_keep]
+
+        print(f"      [INFO] Feature utilizzate (Unione Universale): {X_train.shape[1]}")
+
+        model_type = self.config.experiment.model_type
+        save_dir = f"checkpoints/{model_type}/cross_dataset/parte3_union/{train_name}_to_{test_name}"
+        os.makedirs(save_dir, exist_ok=True)
+        model_path = f"{save_dir}/model.joblib"
+
+        metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=model_path)
+
+        metrics['Task'] = "CrossDataset (Parte 3: Unione)"
+        metrics['Dataset'] = f"Train:{train_name} -> Test:{test_name}"
+        metrics['Model'] = model_type
+
+        return [metrics]

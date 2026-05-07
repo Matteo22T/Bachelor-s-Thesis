@@ -46,12 +46,13 @@ experiment:
   task4: false
   task5: false
   task6: false
-  task7: true
+  task7: false
   task8: false
   task9: false
-  debiasing: true
+  debiasing: false
+  crossdataset_analysis: true
 
-  random_baseline: true
+  random_baseline: false
 
   random_seed: 42
   n_splits: 10

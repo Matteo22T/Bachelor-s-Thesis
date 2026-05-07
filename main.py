@@ -180,7 +180,7 @@ if __name__ == "__main__":
                             os.makedirs(os.path.dirname(out_plot_csv), exist_ok=True)
                             df_plot.to_csv(out_plot_csv, index=False)
 
-                    print("=====================================================\n")
+                    print("=====================================================\n")      
 
 
             
@@ -202,4 +202,59 @@ if __name__ == "__main__":
                         fm_name=fm["name"],
                         model_type=config.experiment.model_type,
                         task5_results=task5_results
-                    )
+                        )
+        if config.experiment.crossdataset_analysis:
+            if len(datasets) > 1:      
+                print(f"\n{'='*80}")
+                print(f"ESPERIMENTO CROSS-DATASET ({fm['name']})")
+                print(f"{'='*80}\n")
+
+                exp_cross = Experiment(config)
+                ds_1_cfg = datasets[0]
+                ds_2_cfg = datasets[1]
+                ds_1_name = ds_1_cfg['name']
+                ds_2_name = ds_2_cfg['name']
+                
+                intersezione, unione = exp_cross.analyze_feature_overlap_from_csv(ds_1_name, ds_2_name)
+
+                loader_1 = DataLoader(copy.deepcopy(config))
+                loader_1.config.data.embeddings_path = ds_1_cfg['embedding_path']
+                loader_1.config.data.metadata_path = ds_1_cfg['metadata_path']
+                data_1 = loader_1.load_data()
+
+                loader_2 = DataLoader(copy.deepcopy(config))
+                loader_2.config.data.embeddings_path = ds_2_cfg['embedding_path']
+                loader_2.config.data.metadata_path = ds_2_cfg['metadata_path']
+                data_2 = loader_2.load_data()
+
+                print("\n--- ESECUZIONE PARTE 1: EMBEDDING PIENO ---")
+                res_base_1to2 = exp_cross.run_cross_dataset_base(data_1, data_2, ds_1_name, ds_2_name)
+                res_base_2to1 = exp_cross.run_cross_dataset_base(data_2, data_1, ds_2_name, ds_1_name)
+
+                print("\n--- ESECUZIONE PARTE 2: EMBEDDING FILTRATO ---")
+                res_filt_1to2 = exp_cross.run_cross_dataset_filtered(data_1, data_2, ds_1_name, ds_2_name)
+                res_filt_2to1 = exp_cross.run_cross_dataset_filtered(data_2, data_1, ds_2_name, ds_1_name)
+
+                print("\n--- ESECUZIONE PARTE 3: UNIONE UNIVERSALE ---")
+                res_union_1to2 = exp_cross.run_cross_dataset_union(data_1, data_2, ds_1_name, ds_2_name, unione)
+                res_union_2to1 = exp_cross.run_cross_dataset_union(data_2, data_1, ds_2_name, ds_1_name, unione)
+
+                if config.experiment.save_results_csv:
+                    print("\n[INFO] Salvataggio dei 6 log su CSV...")
+                    
+                    tutti_i_risultati = [
+                        res_base_1to2, res_base_2to1, 
+                        res_filt_1to2, res_filt_2to1,
+                        res_union_1to2, res_union_2to1
+                    ]
+                    
+                    for res in tutti_i_risultati:
+                        MetricManager.save_to_csv(
+                            dataset_name=res[0]['Dataset'],
+                            target_column=target_columns[0],
+                            bias_attribute=bias_attributes[0],
+                            task_name=res[0]['Task'],
+                            model_type=config.experiment.model_type,
+                            results_list=res,
+                            csv_path=config.experiment.results_csv_path
+                        )
