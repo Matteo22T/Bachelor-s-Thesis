@@ -33,7 +33,6 @@ def check_and_save_params(file_path, log_file):
 
         testo_output += f"{'-' * 80}\n"
 
-        # Stampa a schermo e scrivi sul file
         print(testo_output, end="")
         log_file.write(testo_output)
 

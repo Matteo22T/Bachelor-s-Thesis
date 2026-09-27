@@ -8,6 +8,8 @@ from ConfigLoader import ConfigLoader
 from DataLoader import DataLoader
 from datetime import datetime
 import os
+import numpy as np
+
 
 def generate_perfect_plots(csv_path="results/experiments_log.csv"):
     if not os.path.exists(csv_path):
@@ -412,14 +414,131 @@ def generate_task8_pca_plots():
             plt.close()
 
 
+def generate_cross_dataset_plots(log_csv_path="results/experiments_log.csv"):
+    try:
+        df = pd.read_csv(log_csv_path)
+    except FileNotFoundError:
+        print(f"Errore: Il file {log_csv_path} non è stato trovato.")
+        return
+
+    plt.rcParams.update({
+        'font.size': 14, 
+        'axes.labelsize': 16, 
+        'legend.fontsize': 12, 
+        'xtick.labelsize': 13, 
+        'ytick.labelsize': 14
+    })
+    
+    models = ['random_forest', 'logistic_regression']
+    
+    dataset_groups = {
+        'ecgfm': ('georgia_ecgfm', 'chapman_ecgfm'),
+        'hubert': ('georgia_hubert_ecg_base', 'chapman_hubert_ecg_base')
+    }
+
+    best_t4_dict = {
+        'georgia_ecgfm': {'logistic_regression': 32, 'random_forest': 32},
+        'chapman_ecgfm': {'logistic_regression': 32, 'random_forest': 32},
+        'georgia_hubert_ecg_base': {'logistic_regression': 16, 'random_forest': 16},
+        'chapman_hubert_ecg_base': {'logistic_regression': 16, 'random_forest': 16}
+    }
+
+    def get_f1_macro(dataset_val, task_substr, model_val):
+        row = df[(df['Dataset'] == dataset_val) & 
+                 (df['Model'] == model_val) & 
+                 (df['Task'].str.contains(task_substr, case=False, na=False)) &
+                 (~df['Task'].str.contains('RANDOM', case=False, na=False))]
+        if not row.empty:
+            f1_m = row['F1_Male_Med'].values[-1]
+            f1_f = row['F1_Female_Med'].values[-1]
+            return (f1_m + f1_f) / 2
+        return 0.0
+
+    colors = ['#B0BEC5', '#546E7A', '#EF5350', '#FFA726', '#42A5F5']
+    x_labels = [
+        'In-Domain\nBase', 
+        'In-Domain\nDebiased', 
+        'Cross-Domain\n(Base)', 
+        'Cross-Domain\n(Filtered)', 
+        'Cross-Domain\n(Union)'
+    ]
+
+    for fm_name, (ds_geo, ds_cha) in dataset_groups.items():
+        for model in models:
+            
+            # --- RACCOLTA DATI: TRAIN GEORGIA -> TEST CHAPMAN ---
+            best_t4_geo = best_t4_dict[ds_geo][model]
+            str_cross_geo_to_cha = f"Train:{ds_geo} -> Test:{ds_cha}"
+            
+            y_georgia = [
+                get_f1_macro(ds_geo, 'CASO BASE', model),
+                get_f1_macro(ds_geo, f'Debiasing \(Pareto: -{best_t4_geo} proxy\)', model),
+                get_f1_macro(str_cross_geo_to_cha, 'Parte 1', model),
+                get_f1_macro(str_cross_geo_to_cha, 'Parte 2', model),
+                get_f1_macro(str_cross_geo_to_cha, 'Parte 3', model)
+            ]
+
+            # --- RACCOLTA DATI: TRAIN CHAPMAN -> TEST GEORGIA ---
+            best_t4_cha = best_t4_dict[ds_cha][model]
+            str_cross_cha_to_geo = f"Train:{ds_cha} -> Test:{ds_geo}"
+            
+            y_chapman = [
+                get_f1_macro(ds_cha, 'CASO BASE', model),
+                get_f1_macro(ds_cha, f'Debiasing \(Pareto: -{best_t4_cha} proxy\)', model),
+                get_f1_macro(str_cross_cha_to_geo, 'Parte 1', model),
+                get_f1_macro(str_cross_cha_to_geo, 'Parte 2', model),
+                get_f1_macro(str_cross_cha_to_geo, 'Parte 3', model)
+            ]
+
+            x = np.arange(5)
+
+            # --- GRAFICO 1: TRAIN GEORGIA ---
+            fig, ax = plt.subplots(figsize=(10, 6))
+            bars_g = ax.bar(x, y_georgia, color=colors, edgecolor='black', zorder=3)
+            ax.set_xticks(x)
+            ax.set_xticklabels(x_labels, fontweight='bold')
+            ax.set_ylabel('Macro F1 Score', fontweight='bold')
+            ax.set_title(f'Train: Georgia $\\rightarrow$ Test: Chapman\n({fm_name.upper()} - {model})', fontweight='bold', pad=15)
+            ax.set_ylim(0, 1.05)
+            
+            for bar, val in zip(bars_g, y_georgia):
+                if val >= 0:
+                    ax.text(bar.get_x() + bar.get_width()/2, val + 0.01, f"{val:.2f}", ha='center', va='bottom', fontsize=11, fontweight='bold')
+
+            plt.grid(axis='y', linestyle='--', alpha=0.7, zorder=0)
+            plt.tight_layout()
+            plt.savefig(f"paper_cross_{fm_name}_{model}_train_georgia.png", format='png', dpi=300, bbox_inches='tight')
+            plt.close()
+
+            # --- GRAFICO 2: TRAIN CHAPMAN ---
+            fig, ax = plt.subplots(figsize=(10, 6))
+            bars_c = ax.bar(x, y_chapman, color=colors, edgecolor='black', zorder=3)
+            ax.set_xticks(x)
+            ax.set_xticklabels(x_labels, fontweight='bold')
+            ax.set_ylabel('Macro F1 Score', fontweight='bold')
+            ax.set_title(f'Train: Chapman $\\rightarrow$ Test: Georgia\n({fm_name.upper()} - {model})', fontweight='bold', pad=15)
+            ax.set_ylim(0, 1.05)
+            
+            for bar, val in zip(bars_c, y_chapman):
+                if val >= 0:
+                    ax.text(bar.get_x() + bar.get_width()/2, val + 0.01, f"{val:.2f}", ha='center', va='bottom', fontsize=11, fontweight='bold')
+
+            plt.grid(axis='y', linestyle='--', alpha=0.7, zorder=0)
+            plt.tight_layout()
+            plt.savefig(f"paper_cross_{fm_name}_{model}_train_chapman.png", format='png', dpi=300, bbox_inches='tight')
+            plt.close()
+
+    print("Generazione completata: grafici singoli salvati con successo.")
 
 if __name__ == "__main__":
     print("Generazione grafici...")
 
     #generate_perfect_plots()
 
-    generate_pca_plots()
+    #generate_pca_plots()
 
     #generate_task8_pca_plots()
 
     #generate_debias_post_task7_plots()
+
+    generate_cross_dataset_plots()

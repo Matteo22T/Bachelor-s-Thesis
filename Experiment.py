@@ -131,20 +131,20 @@ class Experiment:
             meta_train = meta_data.iloc[train_index]
             meta_test = meta_data.iloc[test_index]
 
-            train_male_mask = meta_train['sex'] == self.config.experiment.male_value
+            train_mask = meta_train['sex'] == self.config.experiment.female_value
 
-            X_train_male = X_train_full[train_male_mask]
-            y_train_male = y_train_full[train_male_mask]
+            X_train = X_train_full[train_mask]
+            y_train = y_train_full[train_mask]
 
             ds_name = self.config.data.current_dataset
             target = self.config.experiment.target_column[0]
             bias = self.config.experiment.bias_attribute[0]
 
-            base_dir = f"checkpoints/{self.config.experiment.model_type}/{ds_name}/{target}_{bias}/extreme_case"
+            base_dir = f"checkpoints/{self.config.experiment.model_type}/{ds_name}/{target}_{bias}/extreme_case_female"
             os.makedirs(base_dir, exist_ok=True)
             checkpoint_path = f"{base_dir}/fold_{fold}.joblib"
 
-            metrics = self.run_fold_logic(X_train_male, y_train_male, X_test, y_test, meta_test, save_path=checkpoint_path)
+            metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=checkpoint_path)
             all_results.append(metrics)
 
             #print(f"Fold {fold + 1}/{self.config.experiment.n_splits} completato.")
@@ -884,6 +884,32 @@ class Experiment:
         os.makedirs(save_dir, exist_ok=True)
         model_path = f"{save_dir}/model.joblib"
 
+        print("\n      [DEBUG] --- ISPEZIONE MATRICI PRE-TRAINING ---")
+        
+        # Controllo valori nulli o infiniti
+        nan_train = np.isnan(X_train).sum()
+        nan_test = np.isnan(X_test).sum()
+        inf_train = np.isinf(X_train).sum()
+        inf_test = np.isinf(X_test).sum()
+        if nan_train > 0 or nan_test > 0 or inf_train > 0 or inf_test > 0:
+            print(f"      [!] ALLARME: Trovati NaN (Train:{nan_train}, Test:{nan_test}) o Inf (Train:{inf_train}, Test:{inf_test})")
+            
+        # Controllo range dei valori 
+        print(f"      [DEBUG] X_train -> Min: {np.min(X_train):.4f} | Max: {np.max(X_train):.4f} | Media: {np.mean(X_train):.4f}")
+        print(f"      [DEBUG] X_test  -> Min: {np.min(X_test):.4f} | Max: {np.max(X_test):.4f} | Media: {np.mean(X_test):.4f}")
+        
+        # Controllo bilanciamento etichette (y)
+        unique_y_train, counts_y_train = np.unique(y_train, return_counts=True)
+        unique_y_test, counts_y_test = np.unique(y_test, return_counts=True)
+        print(f"      [DEBUG] Distribuzione y_train: {dict(zip(unique_y_train, counts_y_train))}")
+        print(f"      [DEBUG] Distribuzione y_test:  {dict(zip(unique_y_test, counts_y_test))}")
+        
+        # Controllo identità del sesso nei test set per il calcolo delle metriche
+        bias_col = self.config.experiment.bias_attribute[0]
+        unique_sex, counts_sex = np.unique(meta_test[bias_col].dropna(), return_counts=True)
+        print(f"      [DEBUG] Sottopopolazioni in meta_test ({bias_col}): {dict(zip(unique_sex, counts_sex))}")
+        print("      ----------------------------------------------\n")
+
         metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=model_path)
 
         metrics['Task'] = "CrossDataset (Parte 1: Base Full)"
@@ -945,6 +971,32 @@ class Experiment:
         os.makedirs(save_dir, exist_ok=True)
         model_path = f"{save_dir}/model.joblib"
 
+        print("\n      [DEBUG] --- ISPEZIONE MATRICI PRE-TRAINING ---")
+        
+        # Controllo valori nulli o infiniti
+        nan_train = np.isnan(X_train).sum()
+        nan_test = np.isnan(X_test).sum()
+        inf_train = np.isinf(X_train).sum()
+        inf_test = np.isinf(X_test).sum()
+        if nan_train > 0 or nan_test > 0 or inf_train > 0 or inf_test > 0:
+            print(f"      [!] ALLARME: Trovati NaN (Train:{nan_train}, Test:{nan_test}) o Inf (Train:{inf_train}, Test:{inf_test})")
+            
+        # Controllo range dei valori (Scala)
+        print(f"      [DEBUG] X_train -> Min: {np.min(X_train):.4f} | Max: {np.max(X_train):.4f} | Media: {np.mean(X_train):.4f}")
+        print(f"      [DEBUG] X_test  -> Min: {np.min(X_test):.4f} | Max: {np.max(X_test):.4f} | Media: {np.mean(X_test):.4f}")
+        
+        # Controllo bilanciamento etichette (y)
+        unique_y_train, counts_y_train = np.unique(y_train, return_counts=True)
+        unique_y_test, counts_y_test = np.unique(y_test, return_counts=True)
+        print(f"      [DEBUG] Distribuzione y_train: {dict(zip(unique_y_train, counts_y_train))}")
+        print(f"      [DEBUG] Distribuzione y_test:  {dict(zip(unique_y_test, counts_y_test))}")
+        
+        # Controllo identità del sesso nei test set per il calcolo delle metriche
+        bias_col = self.config.experiment.bias_attribute[0]
+        unique_sex, counts_sex = np.unique(meta_test[bias_col].dropna(), return_counts=True)
+        print(f"      [DEBUG] Sottopopolazioni in meta_test ({bias_col}): {dict(zip(unique_sex, counts_sex))}")
+        print("      ----------------------------------------------\n")
+
         metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=model_path)
 
         metrics['Task'] = "CrossDataset (Parte 2: Filtrato)"
@@ -979,6 +1031,32 @@ class Experiment:
         save_dir = f"checkpoints/{model_type}/cross_dataset/parte3_union/{train_name}_to_{test_name}"
         os.makedirs(save_dir, exist_ok=True)
         model_path = f"{save_dir}/model.joblib"
+
+        print("\n      [DEBUG] --- ISPEZIONE MATRICI PRE-TRAINING ---")
+        
+        # Controllo valori nulli o infiniti
+        nan_train = np.isnan(X_train).sum()
+        nan_test = np.isnan(X_test).sum()
+        inf_train = np.isinf(X_train).sum()
+        inf_test = np.isinf(X_test).sum()
+        if nan_train > 0 or nan_test > 0 or inf_train > 0 or inf_test > 0:
+            print(f"      [!] ALLARME: Trovati NaN (Train:{nan_train}, Test:{nan_test}) o Inf (Train:{inf_train}, Test:{inf_test})")
+            
+        # Controllo range dei valori (Scala)
+        print(f"      [DEBUG] X_train -> Min: {np.min(X_train):.4f} | Max: {np.max(X_train):.4f} | Media: {np.mean(X_train):.4f}")
+        print(f"      [DEBUG] X_test  -> Min: {np.min(X_test):.4f} | Max: {np.max(X_test):.4f} | Media: {np.mean(X_test):.4f}")
+        
+        # Controllo bilanciamento etichette (y)
+        unique_y_train, counts_y_train = np.unique(y_train, return_counts=True)
+        unique_y_test, counts_y_test = np.unique(y_test, return_counts=True)
+        print(f"      [DEBUG] Distribuzione y_train: {dict(zip(unique_y_train, counts_y_train))}")
+        print(f"      [DEBUG] Distribuzione y_test:  {dict(zip(unique_y_test, counts_y_test))}")
+        
+        # Controllo identità del sesso nei test set per il calcolo delle metriche
+        bias_col = self.config.experiment.bias_attribute[0]
+        unique_sex, counts_sex = np.unique(meta_test[bias_col].dropna(), return_counts=True)
+        print(f"      [DEBUG] Sottopopolazioni in meta_test ({bias_col}): {dict(zip(unique_sex, counts_sex))}")
+        print("      ----------------------------------------------\n")
 
         metrics = self.run_fold_logic(X_train, y_train, X_test, y_test, meta_test, save_path=model_path)
 

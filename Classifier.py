@@ -48,7 +48,6 @@ class Classifier(ABC):
                 
                 grid.fit(X, y)
                 
-                # Il modello diventa il "miglior stimatore" trovato
                 self.model = grid.best_estimator_
                 print(f"Fatto. Best params: {grid.best_params_}")
             else:

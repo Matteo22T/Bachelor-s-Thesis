@@ -30,13 +30,13 @@ data:
 
 experiment:
 
-  model_type: "logistic_regression" # Opzioni: "random_forest", "logistic_regression"
+  model_type: "random_forest" # Opzioni: "random_forest", "logistic_regression"
   target_column: ["AF"]
   bias_attribute: ["sex"]
 
   force_retrain: false
 
-  save_results_csv: true
+  save_results_csv: false
   results_csv_path: "results/experiments_log.csv"
 
   save_filtered_embeddings: true
@@ -69,7 +69,7 @@ experiment:
 
   pca_dimensions: 2
 
-  # Best Parameters per Dataset e Modello (Ottimizzati su F1-Score)
+# Best Parameters per Dataset e Modello (Ottimizzati su F1-Score)
   georgia_ecgfm:
     logistic_regression:
       best_t4: 25
@@ -93,8 +93,8 @@ experiment:
   georgia_hubert_ecg_base:
     logistic_regression:
       best_t4: 25
-      best_t7: 512
-      best_t4_post_t7: 32
+      best_t7: 700
+      best_t4_post_t7: 16
     random_forest:
       best_t4: 25
       best_t7: 700
@@ -103,12 +103,12 @@ experiment:
   chapman_hubert_ecg_base:
     logistic_regression:
       best_t4: 100
-      best_t7: 512
-      best_t4_post_t7: 128
+      best_t7: 700
+      best_t4_post_t7: 16
     random_forest:
       best_t4: 100
-      best_t7: 600
-      best_t4_post_t7: 128
+      best_t7: 700
+      best_t4_post_t7: 16
  
   male_value: 0
   female_value: 1
